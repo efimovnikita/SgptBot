@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgptBot", "SgptBot\SgptBot.csproj", "{74F59239-C798-4F77-B6A7-65D9E6308202}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{74F59239-C798-4F77-B6A7-65D9E6308202}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74F59239-C798-4F77-B6A7-65D9E6308202}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74F59239-C798-4F77-B6A7-65D9E6308202}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74F59239-C798-4F77-B6A7-65D9E6308202}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
