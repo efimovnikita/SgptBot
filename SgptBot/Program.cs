@@ -116,7 +116,6 @@ internal class Bot
                 {
                     await client.SendTextMessageAsync(chatId, "Error. Try to paraphrase your request.",
                         cancellationToken: token);
-                    _logger.Error("Exit code != 0. Error:{Error}", result.StandardError);
                     return;
                 }
 
@@ -124,7 +123,7 @@ internal class Bot
             }
             catch (Exception exception)
             {
-                _logger.Error("Error:{Error}", exception.Message);
+                Console.WriteLine(exception.Message);
             }
         }
     }
