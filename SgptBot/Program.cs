@@ -69,62 +69,55 @@ internal class Bot
         }
         private static Task PollingErrorHandler(ITelegramBotClient client, Exception exception, CancellationToken token)
         {
-            _logger.Error("Error:{Error}", exception.Message);
+            _logger.Error("Error. Something went wrong");
             return Task.CompletedTask;
         }
 
         private async Task UpdateHandler(ITelegramBotClient client, Update update, CancellationToken token)
         {
-            try
+            Message? message = update.Message;
+            if (message == null)
             {
-                Message? message = update.Message;
-                if (message == null)
-                {
-                    return;
-                }
-
-                if (message.Type != MessageType.Text) // working only with text
-                {
-                    return;
-                }
-
-                long chatId = message.Chat.Id; // user ID
-                _logger.Information("ID: {Id}, Name: {Name}", chatId, message.Chat.Username);
-
-                if (Ids.Count != 0 && Ids.Contains(chatId) == false)
-                {
-                    await client.SendTextMessageAsync(chatId, "You don't have privileges to use this bot.",
-                        cancellationToken: token);
-                    _logger.Error("User {Name} with ID {Id} don't have privileges to use this bot",
-                        message.Chat.Username, chatId);
-                    return;
-                }
-
-                string? text = message.Text;
-                if (String.IsNullOrEmpty(text))
-                {
-                    return;
-                }
-
-                string cleanedText = text.Replace("\"", "").Replace("\'", "");
-
-                BufferedCommandResult result = await Cli.Wrap(Path)
-                    .WithArguments($"--no-animation --no-spinner \"{cleanedText}\"")
-                    .WithValidation(CommandResultValidation.None)
-                    .ExecuteBufferedAsync();
-                if (result.ExitCode != 0)
-                {
-                    await client.SendTextMessageAsync(chatId, "Error. Try to paraphrase your request.",
-                        cancellationToken: token);
-                    _logger.Error("Error. ExitCode != 0");
-                    return;
-                }
-
-                await client.SendTextMessageAsync(chatId, result.StandardOutput, cancellationToken: token);
+                return;
             }
-            catch (Exception)
+
+            if (message.Type != MessageType.Text) // working only with text
             {
-                _logger.Error("Error. Something went wrong");
+                return;
             }
+
+            long chatId = message.Chat.Id; // user ID
+            _logger.Information("ID: {Id}, Name: {Name}", chatId, message.Chat.Username);
+
+            if (Ids.Count != 0 && Ids.Contains(chatId) == false)
+            {
+                await client.SendTextMessageAsync(chatId, "You don't have privileges to use this bot.",
+                    cancellationToken: token);
+                _logger.Error("User {Name} with ID {Id} don't have privileges to use this bot",
+                    message.Chat.Username, chatId);
+                return;
+            }
+
+            string? text = message.Text;
+            if (String.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            string cleanedText = text.Replace("\"", "").Replace("\'", "");
+
+            BufferedCommandResult result = await Cli.Wrap(Path)
+                .WithArguments($"--no-animation --no-spinner \"{cleanedText}\"")
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
+            if (result.ExitCode != 0)
+            {
+                await client.SendTextMessageAsync(chatId, "Error. Try to paraphrase your request.",
+                    cancellationToken: token);
+                _logger.Error("Error. ExitCode != 0");
+                return;
+            }
+
+            await client.SendTextMessageAsync(chatId, result.StandardOutput, cancellationToken: token);
         }
     }
