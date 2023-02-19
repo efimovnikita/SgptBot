@@ -31,15 +31,28 @@ internal static class Program
         rootCommand.Invoke(args);
     }
 
-    private static async Task RunCommand(string promt, string key)
+    private static async Task RunCommand(string prompt, string key)
     {
-        OpenAIAPI api = new(key);
-        
-        CompletionResult result = await api.Completions.CreateCompletionAsync(
-            promt,
-            Model.DavinciText,
-            max_tokens: 2048);
-        
-        Console.WriteLine(result.ToString());
+        try
+        {
+            OpenAIAPI api = new(key);
+
+            CompletionResult result = await api.Completions.CreateCompletionAsync(
+                prompt,
+                Model.DavinciText,
+                max_tokens: 2048);
+
+            if (result == null || String.IsNullOrEmpty(result.ToString()))
+            {
+                throw new Exception("An error occurred while running the command.");
+            }
+
+            Console.WriteLine(result.ToString());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred: {ex.Message}");
+            Environment.ExitCode = 1;
+        }
     }
 }

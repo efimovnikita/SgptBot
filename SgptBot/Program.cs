@@ -17,7 +17,13 @@ internal static class Program
             IsRequired = true
         };
         keyOption.AddAlias("-k");
-        
+
+        Option<string> gpt3KeyOption = new("--gptkey", "GPT-3 API KEY")
+        {
+            IsRequired = true
+        };
+        gpt3KeyOption.AddAlias("-g");
+
         Option<string> pathOption = new("--path", "Path to sgpt exec")
         {
             IsRequired = true
@@ -36,16 +42,17 @@ internal static class Program
         rootCommand.AddOption(keyOption);
         rootCommand.AddOption(pathOption);
         rootCommand.AddOption(idsOption);
+        rootCommand.AddOption(gpt3KeyOption);
 
-        rootCommand.SetHandler(RunCommand, keyOption, pathOption, idsOption);
+        rootCommand.SetHandler(RunCommand, keyOption, pathOption, idsOption, gpt3KeyOption);
             
         // Parse the command line arguments
         rootCommand.Invoke(args);
     }
 
-    private static void RunCommand(string key, string path, List<long> ids)
+    private static void RunCommand(string key, string path, List<long> ids, string gptKey)
     {
-        Bot _ = new(key, path, ids);
+        Bot _ = new(key, path, ids, gptKey);
     }
 }
 internal class Bot
@@ -53,8 +60,9 @@ internal class Bot
         private static ILogger _logger = Log.Logger;
         private string Path { get; }
         private List<long> Ids { get; }
+        private string GptKey { get; }
 
-        public Bot(string key, string path, List<long> ids)
+        public Bot(string key, string path, List<long> ids, string gptKey)
         {
             _logger = new LoggerConfiguration()
                 .WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
@@ -62,6 +70,7 @@ internal class Bot
 
             Path = path;
             Ids = ids;
+            GptKey = gptKey;
             TelegramBotClient client = new(key);
             client.StartReceiving(UpdateHandler, PollingErrorHandler);
             
@@ -107,7 +116,7 @@ internal class Bot
             string cleanedText = text.Replace("\"", "").Replace("\'", "");
 
             BufferedCommandResult result = await Cli.Wrap(Path)
-                .WithArguments($"--no-animation --no-spinner \"{cleanedText}\"")
+                .WithArguments($"--key \"{GptKey}\" --promt \"{cleanedText}\"")
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
             if (result.ExitCode != 0)
