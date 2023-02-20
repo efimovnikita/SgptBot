@@ -9,11 +9,11 @@ internal static class Program
 {
     private static void Main(string[] args)
     {
-        Option<string> promtOption = new("--promt", "Promt for GPT-3")
+        Option<string> promptOption = new("--promt", "Promt for GPT-3")
         {
             IsRequired = true
         };
-        promtOption.AddAlias("-p");
+        promptOption.AddAlias("-p");
         
         Option<string> keyOption = new("--key", "API KEY for GPT-3")
         {
@@ -22,10 +22,10 @@ internal static class Program
         keyOption.AddAlias("-k");
         
         RootCommand rootCommand = new("Tool for communicating with GPT-3");
-        rootCommand.AddOption(promtOption);
+        rootCommand.AddOption(promptOption);
         rootCommand.AddOption(keyOption);
 
-        rootCommand.SetHandler(RunCommand, promtOption, keyOption);
+        rootCommand.SetHandler(RunCommand, promptOption, keyOption);
             
         // Parse the command line arguments
         rootCommand.Invoke(args);
