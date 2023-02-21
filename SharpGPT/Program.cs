@@ -20,6 +20,7 @@ internal static class Program
             IsRequired = true
         };
         keyOption.AddAlias("-k");
+        keyOption.AddValidator(SgptBot.Program.ValidateGptKey);
         
         RootCommand rootCommand = new("Tool for communicating with GPT-3");
         rootCommand.AddOption(promptOption);
