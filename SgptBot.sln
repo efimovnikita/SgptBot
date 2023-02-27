@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgptBot", "SgptBot\SgptBot.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpGPT", "SharpGPT\SharpGPT.csproj", "{894EA047-2B29-4671-814E-5B92AD812F98}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParaphrasmApi", "ParaphrasmApi\ParaphrasmApi.csproj", "{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{894EA047-2B29-4671-814E-5B92AD812F98}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{894EA047-2B29-4671-814E-5B92AD812F98}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{894EA047-2B29-4671-814E-5B92AD812F98}.Release|Any CPU.Build.0 = Release|Any CPU
+		{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
