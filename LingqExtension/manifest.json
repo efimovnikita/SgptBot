@@ -1,0 +1,17 @@
+{
+    "name": "LingQ Text Extractor",
+    "version": "1.0",
+    "manifest_version": 2,
+    "description": "Extract text from LingQ's reader",
+    "permissions": ["activeTab"],
+    "browser_action": {
+      "default_title": "Extract text",
+      "default_popup": "popup.html"
+    },
+    "content_scripts": [
+      {
+        "matches": ["https://www.lingq.com/en/learn/en/web/reader/*"],
+        "js": ["popup.js"]
+      }
+    ]
+  }
