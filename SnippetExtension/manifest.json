@@ -1,0 +1,13 @@
+{
+  "manifest_version": 2,
+  "name": "ChatGPT Extension",
+  "version": "1.0.0",
+  "description": "Add buttons to the ChatGPT text area.",
+  "content_scripts": [
+    {
+      "matches": ["https://chat.openai.com/chat/*"],
+      "js": ["content.js"],
+      "css": ["assets/style.css"]
+    }
+  ]
+}
