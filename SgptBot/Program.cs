@@ -87,7 +87,7 @@ public static class Program
         }
     }
 
-    private static void ValidatePath(OptionResult result)
+    public static void ValidatePath(OptionResult result)
     {
         string? value = result.GetValueOrDefault<string>();
         if (String.IsNullOrEmpty(value))
