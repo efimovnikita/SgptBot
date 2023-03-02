@@ -19,8 +19,8 @@ internal static class Program
         outputOption.AddAlias("-o");
 
         Option<int> sizeOption = new("--size", () => 570, "Chunk size (characters count)");
-        Option<string> promtOption = new("--promt",
-            () => "Turn this into the normal text and translate it to simple English", "Default promt before chunk");
+        Option<string> promtOption = new("--prompt",
+            () => "Turn this into the normal text and translate it to simple English", "Default prompt before chunk");
 
         RootCommand rootCommand = new("Subtitles splitter");
         rootCommand.AddOption(inputOption);
