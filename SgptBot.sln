@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesConverter", "Subti
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesSplitter", "SubtitlesSplitter\SubtitlesSplitter.csproj", "{0304F683-BCB8-4154-8E11-9598A0C3B889}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesApi", "SubtitlesApi\SubtitlesApi.csproj", "{D496D0B8-8841-449E-9A7E-2AB0658ECFFB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{0304F683-BCB8-4154-8E11-9598A0C3B889}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0304F683-BCB8-4154-8E11-9598A0C3B889}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0304F683-BCB8-4154-8E11-9598A0C3B889}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D496D0B8-8841-449E-9A7E-2AB0658ECFFB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D496D0B8-8841-449E-9A7E-2AB0658ECFFB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D496D0B8-8841-449E-9A7E-2AB0658ECFFB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D496D0B8-8841-449E-9A7E-2AB0658ECFFB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
