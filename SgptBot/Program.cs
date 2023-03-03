@@ -1,8 +1,7 @@
 ﻿using System.CommandLine;
 using System.CommandLine.Parsing;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
-using CliWrap;
-using CliWrap.Buffered;
 using Serilog;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -19,21 +18,18 @@ public static class Program
             IsRequired = true
         };
         keyOption.AddAlias("-k");
-        keyOption.AddValidator(ValidateTelegramApiKey);
 
         Option<string> gpt3KeyOption = new("--gptkey", "GPT-3 API KEY")
         {
             IsRequired = true
         };
         gpt3KeyOption.AddAlias("-g");
-        gpt3KeyOption.AddValidator(ValidateGptKey);
 
         Option<string> pathOption = new("--path", "Path to sgpt exec")
         {
             IsRequired = true
         };
         pathOption.AddAlias("-p");
-        pathOption.AddValidator(ValidatePath);
 
         Option<List<long>> idsOption = new(
             "--ids",
@@ -64,22 +60,6 @@ public static class Program
         }
 
         Regex regex = new(@"^[\w\d-]+-[A-Za-z0-9-_]{32}$");
-        bool isMatch = regex.IsMatch(value!);
-        if (isMatch == false)
-        {
-            result.ErrorMessage = "Invalid key format";
-        }
-    }
-
-    private static void ValidateTelegramApiKey(OptionResult result)
-    {
-        string? value = result.GetValueOrDefault<string>();
-        if (String.IsNullOrEmpty(value))
-        {
-            result.ErrorMessage = "Key is required.";
-        }
-
-        Regex regex = new(@"^\d+:[\w\d_-]+$");
         bool isMatch = regex.IsMatch(value!);
         if (isMatch == false)
         {
@@ -129,7 +109,8 @@ internal class Bot
         }
         private static Task PollingErrorHandler(ITelegramBotClient client, Exception exception, CancellationToken token)
         {
-            _logger.Error("Error. Something went wrong");
+            Console.WriteLine($"Error. Something went wrong:\n{exception}");
+            _logger.Error("Error. Something went wrong:\n{Message}", exception.Message);
             return Task.CompletedTask;
         }
 
@@ -167,18 +148,27 @@ internal class Bot
 
             string cleanedText = text.Replace("\"", "").Replace("\'", "");
 
-            BufferedCommandResult result = await Cli.Wrap(Path)
-                .WithArguments($"--key \"{GptKey}\" --promt \"{cleanedText}\"")
-                .WithValidation(CommandResultValidation.None)
-                .ExecuteBufferedAsync();
-            if (result.ExitCode != 0)
+            ProcessStartInfo start = new()
+            {
+                FileName = "python3",
+                Arguments = $"{Path} --key \"{GptKey}\" --prompt \"{cleanedText}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true
+            };
+
+            try
+            {
+                using Process process = Process.Start(start)!;
+                using StreamReader reader = process.StandardOutput;
+                string result = await reader.ReadToEndAsync();
+                
+                await client.SendTextMessageAsync(chatId, result, cancellationToken: token);
+            }
+            catch (Exception ex)
             {
                 await client.SendTextMessageAsync(chatId, "Error. Try to paraphrase your request.",
                     cancellationToken: token);
-                _logger.Error("CliError. ExitCode != 0. Message: {Message}", text);
-                return;
+                _logger.Error("CliError\nError:\n{Error}\nMessage:\n{Message}", ex.Message, text);
             }
-
-            await client.SendTextMessageAsync(chatId, result.StandardOutput, cancellationToken: token);
         }
     }
