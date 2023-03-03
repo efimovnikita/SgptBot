@@ -9,7 +9,7 @@ internal static class Program
 {
     private static void Main(string[] args)
     {
-        Option<string> promptOption = new("--promt", "Promt for GPT-3")
+        Option<string> promptOption = new("--prompt", "Prompt for GPT-3")
         {
             IsRequired = true
         };
