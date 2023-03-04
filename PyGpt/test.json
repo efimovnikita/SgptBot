@@ -1,0 +1,5 @@
+[
+    {"role": "user", "content": "Give a short sentence in English with words 'fish'. This word should existed twice  within this sentence."},
+    {"role": "assistant", "content": "I went to the fish market to buy some fish for dinner."},
+    {"role": "user", "content": "Replace word 'fish' by word 'apple' in your previous sentence"}
+]
