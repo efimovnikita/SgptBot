@@ -59,10 +59,14 @@ internal class Bot
         {
             return;
         }
-            
+
+        int messageId = message.MessageId;
+
         if (Ids.Count != 0 && Ids.Contains(chatId) == false)
         {
-            await client.SendTextMessageAsync(chatId, "You don't have privileges to use this bot.",
+            await client.SendTextMessageAsync(chatId,
+                "You don't have privileges to use this bot.",
+                replyToMessageId: messageId,
                 cancellationToken: token);
             _logger.Information(
                 "User {Name}, with ID {Id}, with message \'{Message}\' don't have privileges to use this bot",
@@ -83,7 +87,7 @@ internal class Bot
         if (cleanedText == "/reset")
         {
             user.Messages.Clear();
-            await client.SendTextMessageAsync(chatId, resetContextMsg, cancellationToken: token);
+            await client.SendTextMessageAsync(chatId, resetContextMsg, replyToMessageId: messageId, cancellationToken: token);
             return;
         }
             
@@ -113,17 +117,17 @@ internal class Bot
                 
             user.AddMessage(UserRole.assistant.ToString(), trimmedResult);
 
-            await client.SendTextMessageAsync(chatId, trimmedResult, cancellationToken: token);
+            await client.SendTextMessageAsync(chatId, trimmedResult, replyToMessageId: messageId, cancellationToken: token);
 
             if (user.Messages.Where(msg => msg.role == UserRole.user.ToString()).ToList().Count > 25)
             {
                 user.Messages.Clear();
-                await client.SendTextMessageAsync(chatId, resetContextMsg, cancellationToken: token);
+                await client.SendTextMessageAsync(chatId, resetContextMsg, replyToMessageId: messageId, cancellationToken: token);
             }
         }
         catch (Exception ex)
         {
-            await client.SendTextMessageAsync(chatId, "Error. Try to paraphrase your request.",
+            await client.SendTextMessageAsync(chatId, "Error. Try to paraphrase your request.", replyToMessageId: messageId,
                 cancellationToken: token);
             _logger.Error("CliError\nError:\n{Error}\nMessage:\n{Message}", ex.Message, text);
         }
