@@ -82,7 +82,7 @@ internal class Bot
 
         #endregion
 
-        string cleanedText = text.Replace("\"", "").Replace("\'", "");
+        #region Get user or add new
 
         User? user = Users.FirstOrDefault(user => user.Id == chatId);
         if (user == null)
@@ -91,7 +91,10 @@ internal class Bot
             Users.Add(user);
         }
 
+        #endregion
+
         const string resetContextMsg = "I reset the context of our conversation.";
+        string cleanedText = text.Replace("\"", "").Replace("\'", "");
         if (cleanedText == "/reset")
         {
             user.Messages.Clear();
