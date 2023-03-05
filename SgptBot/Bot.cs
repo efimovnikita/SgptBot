@@ -127,11 +127,15 @@ internal class Bot
 
             await client.SendTextMessageAsync(chatId, trimmedResult, replyToMessageId: messageId, cancellationToken: token);
 
+            #region Memory limit
+
             if (user.Messages.Where(msg => msg.role == UserRole.user.ToString()).ToList().Count > 25)
             {
                 user.Messages.Clear();
                 await client.SendTextMessageAsync(chatId, resetContextMsg, replyToMessageId: messageId, cancellationToken: token);
             }
+
+            #endregion
         }
         catch (Exception ex)
         {
