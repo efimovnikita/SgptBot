@@ -97,8 +97,7 @@ internal class Bot
         string cleanedText = text.Replace("\"", "").Replace("\'", "");
         if (cleanedText == "/reset")
         {
-            user.Messages.Clear();
-            await client.SendTextMessageAsync(chatId, resetContextMsg, replyToMessageId: messageId, cancellationToken: token);
+            await ResetConversation(client, token, user, chatId, resetContextMsg, messageId);
             return;
         }
             
@@ -134,8 +133,7 @@ internal class Bot
 
             if (user.Messages.Where(msg => msg.role == Role.user.ToString()).ToList().Count > 25)
             {
-                user.Messages.Clear();
-                await client.SendTextMessageAsync(chatId, resetContextMsg, replyToMessageId: messageId, cancellationToken: token);
+                await ResetConversation(client, token, user, chatId, resetContextMsg, messageId);
             }
 
             #endregion
@@ -146,5 +144,12 @@ internal class Bot
                 cancellationToken: token);
             _logger.Error("CliError\nError:\n{Error}\nMessage:\n{Message}", ex.Message, text);
         }
+    }
+
+    private static async Task ResetConversation(ITelegramBotClient client, CancellationToken token, User user, long chatId,
+        string resetContextMsg, int messageId)
+    {
+        user.Messages.Clear();
+        await client.SendTextMessageAsync(chatId, resetContextMsg, replyToMessageId: messageId, cancellationToken: token);
     }
 }
