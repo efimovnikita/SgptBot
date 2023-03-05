@@ -40,6 +40,8 @@ internal class Bot
 
     private async Task UpdateHandler(ITelegramBotClient client, Update update, CancellationToken token)
     {
+        #region Base msg info
+
         Message? message = update.Message;
         if (message == null)
         {
@@ -62,6 +64,10 @@ internal class Bot
 
         int messageId = message.MessageId;
 
+        #endregion
+
+        #region Guard
+
         if (Ids.Count != 0 && Ids.Contains(chatId) == false)
         {
             await client.SendTextMessageAsync(chatId,
@@ -73,6 +79,8 @@ internal class Bot
                 message.Chat.Username, chatId, text);
             return;
         }
+
+        #endregion
 
         string cleanedText = text.Replace("\"", "").Replace("\'", "");
 
