@@ -102,7 +102,7 @@ internal class Bot
             return;
         }
             
-        user.AddMessage(UserRole.user.ToString(), cleanedText);
+        user.AddMessage(Role.user.ToString(), cleanedText);
             
         string promptJson = JsonSerializer.Serialize(user.Messages);
             
@@ -126,13 +126,13 @@ internal class Bot
             string result = await reader.ReadToEndAsync();
             string trimmedResult = result.Trim();
                 
-            user.AddMessage(UserRole.assistant.ToString(), trimmedResult);
+            user.AddMessage(Role.assistant.ToString(), trimmedResult);
 
             await client.SendTextMessageAsync(chatId, trimmedResult, replyToMessageId: messageId, cancellationToken: token);
 
             #region Memory limit
 
-            if (user.Messages.Where(msg => msg.role == UserRole.user.ToString()).ToList().Count > 25)
+            if (user.Messages.Where(msg => msg.role == Role.user.ToString()).ToList().Count > 25)
             {
                 user.Messages.Clear();
                 await client.SendTextMessageAsync(chatId, resetContextMsg, replyToMessageId: messageId, cancellationToken: token);
