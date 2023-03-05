@@ -6,5 +6,6 @@ namespace SgptBot;
 public enum UserRole
 {
     user,
-    assistant
+    assistant,
+    system
 }
