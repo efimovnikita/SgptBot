@@ -95,11 +95,16 @@ internal class Bot
 
         const string resetContextMsg = "I reset the context of our conversation.";
         string cleanedText = text.Replace("\"", "").Replace("\'", "");
+
+        #region Reset logic
+
         if (cleanedText == "/reset")
         {
             await ResetConversation(client, token, user, chatId, resetContextMsg, messageId);
             return;
         }
+
+        #endregion
             
         user.AddMessage(Role.user.ToString(), cleanedText);
             
