@@ -95,12 +95,31 @@ internal class Bot
 
         const string resetContextMsg = "I reset the context of our conversation.";
         string cleanedText = text.Replace("\"", "").Replace("\'", "");
-
+        
         #region Reset logic
 
         if (cleanedText == "/reset")
         {
             await ResetConversation(client, token, user, chatId, resetContextMsg, messageId);
+            return;
+        }
+
+        #endregion
+
+        #region Imagine logic
+
+        const string imagineKeyword = "/imagine";
+        if (cleanedText.StartsWith(imagineKeyword))
+        {
+            string textWithoutKeyword = cleanedText.Replace(imagineKeyword, "").Trim();
+            if (String.IsNullOrWhiteSpace(textWithoutKeyword))
+            {
+                return;
+            }
+
+            user.InsertSystemMessage(textWithoutKeyword);
+            await client.SendTextMessageAsync(chatId, "🫡", replyToMessageId: messageId, cancellationToken: token);
+
             return;
         }
 
