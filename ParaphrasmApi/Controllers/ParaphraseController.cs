@@ -20,7 +20,7 @@ public class ParaphraseController : ControllerBase
         
         User user = new(123);
         user.InsertSystemMessage("You are a professional English teacher. Your specialization is to paraphrase and rewrite English sentences and you usually use simple English words for beginner (A2) or intermediate (B1) English learners.");
-        user.AddMessage(Role.user.ToString(), input);
+        user.AddMessage(Role.user.ToString(), $"Rewrite this in more simple English words. Use simple structured sentences:\n{input}");
         
         string promptJson = JsonSerializer.Serialize(user.Messages);
             
