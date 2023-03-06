@@ -44,7 +44,6 @@ public class ParaphraseController : ControllerBase
             using StreamReader reader = process.StandardOutput;
             string result = await reader.ReadToEndAsync();
             trimmedResult = result.Trim();
-            
         }
         catch (Exception)
         {
