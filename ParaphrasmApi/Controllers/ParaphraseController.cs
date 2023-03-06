@@ -1,6 +1,7 @@
-using CliWrap;
-using CliWrap.Buffered;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using SgptBot;
 
 namespace ParaphrasmApi.Controllers;
 
@@ -17,21 +18,39 @@ public class ParaphraseController : ControllerBase
             return Ok("Key should be set");
         }
         
-        string? path = Environment.GetEnvironmentVariable("SHARPPATH");
-        if (String.IsNullOrWhiteSpace(path))
+        User user = new(123);
+        user.InsertSystemMessage("You are a professional English teacher. Your specialization is to paraphrase and rewrite English sentences and you usually use simple English words for beginner (A2) or intermediate (B1) English learners.");
+        user.AddMessage(Role.user.ToString(), input);
+        
+        string promptJson = JsonSerializer.Serialize(user.Messages);
+            
+        // Save the JSON string to a file
+        const string path = "user_message.json";
+        System.IO.File.WriteAllText(path, promptJson);
+            
+        string arguments = $"pygpt.py -k \"{key}\" -p \"{path}\"";
+        ProcessStartInfo start = new()
         {
-            return Ok("Path to SharpGTP should be set");
-        }
+            FileName = "python3",
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true
+        };
 
-        BufferedCommandResult result = await Cli.Wrap(path!)
-            .WithArguments($"--key \"{key}\" --promt \"Rewrite this in more simple words:\n{input}\"")
-            .WithValidation(CommandResultValidation.None)
-            .ExecuteBufferedAsync();
-        if (result.ExitCode != 0)
+        string trimmedResult;
+        try
+        {
+            using Process process = Process.Start(start)!;
+            using StreamReader reader = process.StandardOutput;
+            string result = await reader.ReadToEndAsync();
+            trimmedResult = result.Trim();
+            
+        }
+        catch (Exception)
         {
             return Ok("Error while getting result from GPT-3");
         }
-
-        return Ok(result.StandardOutput);
+        
+        return Ok(trimmedResult);
     }
 }
