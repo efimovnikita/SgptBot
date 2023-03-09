@@ -12,9 +12,9 @@ tr -d '\n' < "$input_file_path" | awk -v chunk_size=2000 '{
   while (length(text) > 0) {
     # Split text on the last whitespace character before the chunk size
     if (length(text) > chunk_size) {
-      split_pos = match(substr(text, 1, chunk_size), /[[:space:]][^[:space:]]*$/)
+      split_pos = match(substr(text, 1, chunk_size), /\.[^\.]*$/)
       if (split_pos > 0) {
-        chunk = substr(text, 1, split_pos-1)
+        chunk = substr(text, 1, split_pos)
         text = substr(text, split_pos+1)
       } else {
         chunk = substr(text, 1, chunk_size)
