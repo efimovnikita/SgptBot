@@ -205,7 +205,7 @@ internal static class Program
                 }
             }
         }
-        catch (Exception e)
+        catch (Exception)
         {
             return language;
         }
