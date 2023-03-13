@@ -131,7 +131,7 @@ static class Program
         {
             Conversation chat = api.Chat.CreateConversation();
             
-            chat.AppendSystemMessage("I want you to act as an English translator.");
+            chat.AppendSystemMessage("I want you to act as an English translator. Translate the source text into English only if needed.");
             chat.AppendUserInput("Rewrite this in more simple words and grammar. Try to preserve as many source text as possible. Just replace some difficult words. Keep the meaning same:");
             chat.AppendUserInput(chunk);
 
