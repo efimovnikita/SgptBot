@@ -1,12 +1,15 @@
 ﻿using System.CommandLine;
 using System.CommandLine.NamingConventionBinder;
-using System.Diagnostics;
+using CliWrap;
+using CliWrap.Buffered;
+using CliWrap.EventStream;
 using OpenAI_API;
 using OpenAI_API.Chat;
+using Command = CliWrap.Command;
 
 namespace SubtitlesExtractorAndRewriter;
 
-static class Program
+internal static class Program
 {
     private static void Main(string[] args)
     {
@@ -63,7 +66,7 @@ static class Program
             return;
         }
         
-        if (IsBinaryExists("whisper") == false || IsBinaryExists("mp3splt") == false)
+        if (await IsBinaryExists("whisper") == false || await IsBinaryExists("mp3splt") == false)
         {
             Console.WriteLine("Whisper tool OR mp3splt tool not found");
             return;
@@ -83,7 +86,7 @@ static class Program
         // Register a handler to delete the temp directory when the application exits
         AppDomain.CurrentDomain.ProcessExit += (sender, e) => Directory.Delete(tempDir, true);
 
-        string audioInputPath = GetAudioInputPath(tempDir, toolPath, link);
+        string audioInputPath = await GetAudioInputPath(tempDir, toolPath, link);
         if (File.Exists(audioInputPath) == false)
         {
             Console.WriteLine("Something went wrong during audio download operation");
@@ -93,7 +96,7 @@ static class Program
         // split if needed
         if (end != 0.0)
         {
-            SplitAudio(audioInputPath, start, end);
+            await SplitAudio(audioInputPath, start, end);
         }
         
         string outputDir = Path.GetDirectoryName(audioInputPath);
@@ -101,27 +104,8 @@ static class Program
         foreach (string file in files)
         {
             // detect language
+            string language = await GetLanguage(file);
             string arguments = $"-c \"whisper '{file}' --output_format txt --output_dir '{outputDir}'\"";
-            ProcessStartInfo startInfo = new()
-            {
-                FileName = "/bin/bash",
-                Arguments =
-                    arguments,
-                RedirectStandardOutput = true,
-            };
-            Process process = Process.Start(startInfo);
-
-            string language = "";
-            while (!process.StandardOutput.EndOfStream)
-            {
-                string line = process.StandardOutput.ReadLine();
-                if (line.Contains("Detected language"))
-                {
-                    language = line.Split(':')[1].Trim();
-                    process.Kill();
-                }
-            }
-            process.WaitForExit();
             
             // get transcript
             if (language.Equals("English") == false)
@@ -129,18 +113,24 @@ static class Program
                 arguments = arguments.Substring(0, arguments.Length - 1);
                 arguments += $" --language {language} --task translate\"";
             }
-
-            Console.WriteLine(arguments);
-            startInfo = new ProcessStartInfo
+            
+            Command cmd = Cli.Wrap("/bin/bash")
+                .WithArguments(arguments);
+            await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
             {
-                FileName = "/bin/bash",
-                Arguments =
-                    arguments,
-                RedirectStandardOutput = false
-            };
-            process = Process.Start(startInfo);
-            process!.WaitForExit();
-
+                switch (cmdEvent)
+                {
+                    case StartedCommandEvent:
+                        Console.WriteLine($"Process started; arguments: {arguments}");
+                        break;
+                    case StandardOutputCommandEvent stdOut:
+                        Console.WriteLine(stdOut.Text);
+                        break;
+                    case StandardErrorCommandEvent stdErr:
+                        Console.WriteLine(stdErr.Text);
+                        break;
+                }
+            }
         }
 
         string[] textFiles = Directory.GetFiles(outputDir, "*.txt", SearchOption.AllDirectories);
@@ -148,14 +138,14 @@ static class Program
         string concatenatedText = "";
         foreach (string txtFile in textFiles)
         {
-            concatenatedText += File.ReadAllText(txtFile);
+            concatenatedText += await File.ReadAllTextAsync(txtFile);
         }
 
         if (rewriteSubtitles == false) return;
 
         List<string> chunks = SplitTextIntoChunks(concatenatedText);
 
-        OpenAIAPI api = new(key); // shorthand
+        OpenAIAPI api = new(key);
         
         concatenatedText = "";
         foreach (string chunk in chunks)
@@ -171,7 +161,7 @@ static class Program
             concatenatedText += response;
         }
         
-        File.WriteAllText(Path.Combine(outputDir, "simplified-output.txt"), concatenatedText);
+        await File.WriteAllTextAsync(Path.Combine(outputDir, "simplified-output.txt"), concatenatedText);
         
         files = Directory.GetFiles(outputDir);
         foreach (string file in files)
@@ -179,6 +169,48 @@ static class Program
             File.Copy(file, Path.Combine("/home/maskedball/Downloads", Path.GetFileName(file)),
                 true);
         }
+    }
+
+    private static async Task<string> GetLanguage(string file)
+    {
+        string language = "English";
+
+        try
+        {
+            using CancellationTokenSource cts = new();
+            Command cmd = Cli
+                .Wrap("/bin/bash")
+                .WithArguments($"-c \"whisper '{file}' --output_format txt\"");
+
+            await foreach (CommandEvent cmdEvent in cmd.ListenAsync(cts.Token))
+            {
+                switch (cmdEvent)
+                {
+                    case StartedCommandEvent:
+                    {
+                        Console.WriteLine("Detecting language");
+                        break;
+                    }
+                    case StandardOutputCommandEvent stdOut:
+                    {
+                        if (stdOut.Text.Contains("Detected language"))
+                        {
+                            cts.Cancel();
+                            language = stdOut.Text.Split(":")[1].Trim();
+                            Console.WriteLine($"Language found: {language}");
+                            return language;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            return language;
+        }
+
+        return language;
     }
 
     private static List<string> SplitTextIntoChunks(string text)
@@ -220,37 +252,57 @@ static class Program
         return chunks;
     }
 
-    private static void SplitAudio(string audioInputPath, double start, double end)
+    private static async Task SplitAudio(string audioInputPath, double start, double end)
     {
-        // need to split file
-        ProcessStartInfo startInfo = new()
+        Command cmd = Cli
+            .Wrap("/bin/bash")
+            .WithArguments($"-c \"mp3splt {audioInputPath} {start.ToString("F2")} {end.ToString("F2")}\"");
+        
+        await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
         {
-            FileName = "/bin/bash",
-            Arguments =
-                $"-c \"mp3splt {audioInputPath} {start.ToString("F2")} {end.ToString("F2")}\"",
-            RedirectStandardOutput = false
-        };
-        Process process = Process.Start(startInfo);
-        process!.WaitForExit();
+            switch (cmdEvent)
+            {
+                case StartedCommandEvent:
+                    Console.WriteLine($"Start audio split");
+                    break;
+                case StandardOutputCommandEvent stdOut:
+                    Console.WriteLine(stdOut.Text);
+                    break;
+                case StandardErrorCommandEvent stdErr:
+                    Console.WriteLine(stdErr.Text);
+                    break;
+            }
+        }
 
-        // delete source audio file
         File.Delete(audioInputPath);
     }
 
-    private static string GetAudioInputPath(string tempDir, string toolPath, string link)
+    private static async Task<string> GetAudioInputPath(string tempDir, string toolPath, string link)
     {
         try
         {
             string audioInputPath = Path.Combine(tempDir, "input.mp3");
-            ProcessStartInfo startInfo = new()
+
+            Command cmd = Cli
+                .Wrap("/bin/bash")
+                .WithArguments($"-c \"{toolPath} -x --audio-format mp3 '{link}' -o '{audioInputPath}'\"");
+            
+            await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
             {
-                FileName = "/bin/bash",
-                Arguments =
-                    $"-c \"{toolPath} -x --audio-format mp3 '{link}' -o '{audioInputPath}'\"",
-                RedirectStandardOutput = false
-            };
-            Process process = Process.Start(startInfo);
-            process!.WaitForExit();
+                switch (cmdEvent)
+                {
+                    case StartedCommandEvent:
+                        Console.WriteLine($"Start download audio");
+                        break;
+                    case StandardOutputCommandEvent stdOut:
+                        Console.WriteLine(stdOut.Text);
+                        break;
+                    case StandardErrorCommandEvent stdErr:
+                        Console.WriteLine(stdErr.Text);
+                        break;
+                }
+            }
+            
             return audioInputPath;
         }
         catch (Exception e)
@@ -260,25 +312,12 @@ static class Program
         }
     }
 
-    private static bool IsBinaryExists(string binaryName)
+    private static async Task<bool> IsBinaryExists(string binaryName)
     {
-        // Use the 'which' command to search for the binary in the system's $PATH
-        ProcessStartInfo startInfo = new()
-        {
-            FileName = "/bin/bash",
-            Arguments = $"-c \"which {binaryName}\"",
-            RedirectStandardOutput = true
-        };
-        Process process = Process.Start(startInfo);
-        if (process == null)
-        {
-            return false;
-        }
-
-        process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-
-        // If the process exited with a 0 exit code, the binary exists
-        return process.ExitCode == 0;
+        BufferedCommandResult cmd = await Cli
+            .Wrap("/bin/bash")
+            .WithArguments($"-c \"which {binaryName}\"")
+            .ExecuteBufferedAsync();
+        return cmd.ExitCode == 0;
     }
 }
