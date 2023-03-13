@@ -95,21 +95,52 @@ static class Program
         {
             SplitAudio(audioInputPath, start, end);
         }
-
-        // get transcripts
+        
         string outputDir = Path.GetDirectoryName(audioInputPath);
         string[] files = Directory.GetFiles(outputDir);
         foreach (string file in files)
         {
+            // detect language
+            string arguments = $"-c \"whisper '{file}' --output_format txt --output_dir '{outputDir}'\"";
             ProcessStartInfo startInfo = new()
             {
                 FileName = "/bin/bash",
                 Arguments =
-                    $"-c \"whisper '{file}' --output_format txt --output_dir '{outputDir}'\"",
-                RedirectStandardOutput = false
+                    arguments,
+                RedirectStandardOutput = true,
             };
             Process process = Process.Start(startInfo);
+
+            string language = "";
+            while (!process.StandardOutput.EndOfStream)
+            {
+                string line = process.StandardOutput.ReadLine();
+                if (line.Contains("Detected language"))
+                {
+                    language = line.Split(':')[1].Trim();
+                    process.Kill();
+                }
+            }
+            process.WaitForExit();
+            
+            // get transcript
+            if (language.Equals("English") == false)
+            {
+                arguments = arguments.Substring(0, arguments.Length - 1);
+                arguments += $" --language {language} --task translate\"";
+            }
+
+            Console.WriteLine(arguments);
+            startInfo = new ProcessStartInfo
+            {
+                FileName = "/bin/bash",
+                Arguments =
+                    arguments,
+                RedirectStandardOutput = false
+            };
+            process = Process.Start(startInfo);
             process!.WaitForExit();
+
         }
 
         string[] textFiles = Directory.GetFiles(outputDir, "*.txt", SearchOption.AllDirectories);
