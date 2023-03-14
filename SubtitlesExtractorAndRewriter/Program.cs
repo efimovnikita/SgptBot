@@ -1,80 +1,80 @@
-﻿using System.CommandLine;
-using System.CommandLine.NamingConventionBinder;
+﻿using CliFx;
+using CliFx.Attributes;
+using CliFx.Infrastructure;
 using CliWrap;
 using CliWrap.Buffered;
 using CliWrap.EventStream;
 using OpenAI_API;
 using OpenAI_API.Chat;
-using Command = CliWrap.Command;
 
 namespace SubtitlesExtractorAndRewriter;
 
 internal static class Program
 {
-    private static void Main(string[] args)
+    public static async Task<int> Main()
     {
-        Option<string> linkOption = new(
-            new[] {"-l", "--link"},
-            "Youtube video link")
-        {
-            IsRequired = true
-        };
-
-        Option<double> startOption = new(
-            new[] {"-s", "--start"},
-            "Start time in seconds");
-
-        Option<double> endOption = new(
-            new[] {"-e", "--end"},
-            "End time in seconds");
-
-        Option<string> toolPathOption = new(
-            new[] {"-p", "--tool-path"},
-            "Path to yt-dlp tool")
-        {
-            IsRequired = true
-        };
-
-        Option<bool> rewriteSubtitlesOption = new(
-            new[] {"-r", "--rewrite-subtitles"},
-            () => false,
-            "Rewrite subtitles");
-
-        RootCommand rootCommand = new()
-        {
-            linkOption,
-            startOption,
-            endOption,
-            toolPathOption,
-            rewriteSubtitlesOption,
-        };
-
-        rootCommand.Handler = CommandHandler.Create<string, double, double, string, bool>(HandleRootCommand);
-
-        rootCommand.Invoke(args);
+        return await new CliApplicationBuilder()
+            .AddCommandsFromThisAssembly()
+            .Build()
+            .RunAsync();
     }
+}
 
-    private static async Task HandleRootCommand(string link, double start, double end, string toolPath,
-        bool rewriteSubtitles)
+[Command(Description = "Download subtitles from youtube videos")]
+public class DefaultCommand : ICommand
+{
+    [CommandOption("link", 'l', Description = "YouTube link", IsRequired = true)]
+    public string YoutubeLink { get; init; }
+
+    [CommandOption("start-time", 's', Description = "Start time", IsRequired = false)]
+    public double StartTime { get; init; } = 0;
+
+    [CommandOption("end-time", 'e', Description = "End time", IsRequired = false)]
+    public double EndTime { get; init; } = 0;
+    
+    [CommandOption("tool-path", 'p', Description = "Path to yt-dlp tool", IsRequired = true)]
+    public FileInfo ToolPath { get; init; }
+
+    [CommandOption("rewrite-subtitles", 'r', Description = "Rewrite subtitles?", IsRequired = false)]
+    public bool RewriteSubtitles { get; init; } = false;
+    
+    [CommandOption("translate-subtitles", 't', Description = "Translate non English subtitles?", IsRequired = false)]
+    public bool TranslateSubtitles { get; init; } = false;
+    
+    [CommandOption("output-dir", 'o', Description = "Path to output dir", IsRequired = true)]
+    public DirectoryInfo OutputPath { get; init; }
+    
+    
+    
+    
+    
+    
+    public async ValueTask ExecuteAsync(IConsole console)
     {
         #region Checks
         
         string key = Environment.GetEnvironmentVariable("OPENAI_KEY");
         if (String.IsNullOrWhiteSpace(key))
         {
-            Console.WriteLine("OPENAI_KEY env variable not set");
+            await console.Output.WriteLineAsync("OPENAI_KEY env variable not set");
             return;
         }
         
         if (await IsBinaryExists("whisper") == false || await IsBinaryExists("mp3splt") == false)
         {
-            Console.WriteLine("Whisper tool OR mp3splt tool not found");
+            await console.Output.WriteLineAsync("Whisper tool OR mp3splt tool not found");
             return;
         }
 
-        if (File.Exists(toolPath) == false)
+        if (ToolPath.Exists == false)
         {
-            Console.WriteLine("yt-dlp tool not found");
+            await console.Output.WriteLineAsync("yt-dlp tool not found");
+            return;
+        }
+
+        if (OutputPath.Exists == false)
+        {
+            await console.Output.WriteLineAsync("Output path not exists");
             return;
         }
 
@@ -86,51 +86,49 @@ internal static class Program
         // Register a handler to delete the temp directory when the application exits
         AppDomain.CurrentDomain.ProcessExit += (sender, e) => Directory.Delete(tempDir, true);
 
-        string audioInputPath = await GetAudioInputPath(tempDir, toolPath, link);
+        string audioInputPath = await GetAudioInputPath(tempDir, ToolPath.FullName, YoutubeLink, console);
         if (File.Exists(audioInputPath) == false)
         {
-            Console.WriteLine("Something went wrong during audio download operation");
+            await console.Output.WriteLineAsync("Something went wrong during audio download operation");
             return;
         }
 
         // split if needed
-        if (end != 0.0)
+        if (EndTime != 0.0)
         {
-            await SplitAudio(audioInputPath, start, end);
+            await SplitAudio(audioInputPath, StartTime, EndTime, console);
         }
         
         string outputDir = Path.GetDirectoryName(audioInputPath);
+        if (outputDir == null)
+        {
+            await console.Output.WriteLineAsync("Error getting audio input file path");
+            return;
+        }
+
         string[] files = Directory.GetFiles(outputDir);
         foreach (string file in files)
         {
             // detect language
-            string language = await GetLanguage(file);
-            string arguments = $"-c \"whisper '{file}' --output_format txt --output_dir '{outputDir}'\"";
-            
-            // get transcript
-            if (language.Equals("English") == false)
-            {
-                arguments = arguments.Substring(0, arguments.Length - 1);
-                arguments += $" --language {language} --task translate\"";
-            }
-            
+            string language = await GetLanguage(file, console);
+            string arguments =
+                $"-c \"whisper '{file}' --output_format txt --output_dir '{outputDir}' {(language.Equals("English") == false && TranslateSubtitles ? $"--language {language} --task translate" : "")}\"";
+
             Command cmd = Cli.Wrap("/bin/bash")
                 .WithArguments(arguments);
             await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
-            {
                 switch (cmdEvent)
                 {
                     case StartedCommandEvent:
-                        Console.WriteLine($"Process started; arguments: {arguments}");
+                        await console.Output.WriteLineAsync($"Process started; arguments: {arguments}");
                         break;
                     case StandardOutputCommandEvent stdOut:
-                        Console.WriteLine(stdOut.Text);
+                        await console.Output.WriteLineAsync(stdOut.Text);
                         break;
                     case StandardErrorCommandEvent stdErr:
-                        Console.WriteLine(stdErr.Text);
+                        await console.Output.WriteLineAsync(stdErr.Text);
                         break;
                 }
-            }
         }
 
         string[] textFiles = Directory.GetFiles(outputDir, "*.txt", SearchOption.AllDirectories);
@@ -141,37 +139,48 @@ internal static class Program
             concatenatedText += await File.ReadAllTextAsync(txtFile);
         }
 
-        if (rewriteSubtitles == false) return;
+        if (RewriteSubtitles == false)
+        {
+            WriteAllFilesToOutputDir(outputDir);
+            return;
+        }
 
         List<string> chunks = SplitTextIntoChunks(concatenatedText);
 
         OpenAIAPI api = new(key);
-        
+
         concatenatedText = "";
         foreach (string chunk in chunks)
         {
             Conversation chat = api.Chat.CreateConversation();
-            
-            chat.AppendSystemMessage("I want you to act as an English translator. Translate the source text into English only if needed.");
-            chat.AppendUserInput("Rewrite this in more simple words and grammar. Try to preserve as many source text as possible. Just replace some difficult words. Keep the meaning same:");
+
+            chat.AppendSystemMessage(
+                "I want you to act as an English translator. Translate the source text into English only if needed.");
+            chat.AppendUserInput(
+                "Rewrite this in more simple words and grammar. Try to preserve as many source text as possible. Just replace some difficult words. Keep the meaning same:");
             chat.AppendUserInput(chunk);
 
             string response = await chat.GetResponseFromChatbot();
-            Console.WriteLine(response);
+            await console.Output.WriteLineAsync(response);
             concatenatedText += response;
         }
-        
+
         await File.WriteAllTextAsync(Path.Combine(outputDir, "simplified-output.txt"), concatenatedText);
-        
-        files = Directory.GetFiles(outputDir);
+
+        WriteAllFilesToOutputDir(outputDir);
+    }
+
+    private void WriteAllFilesToOutputDir(string outputDir)
+    {
+        string[] files = Directory.GetFiles(outputDir);
         foreach (string file in files)
         {
-            File.Copy(file, Path.Combine("/home/maskedball/Downloads", Path.GetFileName(file)),
+            File.Copy(file, Path.Combine(OutputPath.FullName, Path.GetFileName(file)),
                 true);
         }
     }
 
-    private static async Task<string> GetLanguage(string file)
+    private static async Task<string> GetLanguage(string file, IConsole console)
     {
         string language = "English";
 
@@ -188,7 +197,7 @@ internal static class Program
                 {
                     case StartedCommandEvent:
                     {
-                        Console.WriteLine("Detecting language");
+                        await console.Output.WriteLineAsync("Detecting language");
                         break;
                     }
                     case StandardOutputCommandEvent stdOut:
@@ -197,7 +206,7 @@ internal static class Program
                         {
                             cts.Cancel();
                             language = stdOut.Text.Split(":")[1].Trim();
-                            Console.WriteLine($"Language found: {language}");
+                            await console.Output.WriteLineAsync($"Language found: {language}");
                             return language;
                         }
                         break;
@@ -252,7 +261,7 @@ internal static class Program
         return chunks;
     }
 
-    private static async Task SplitAudio(string audioInputPath, double start, double end)
+    private static async Task SplitAudio(string audioInputPath, double start, double end, IConsole console)
     {
         Command cmd = Cli
             .Wrap("/bin/bash")
@@ -263,13 +272,13 @@ internal static class Program
             switch (cmdEvent)
             {
                 case StartedCommandEvent:
-                    Console.WriteLine($"Start audio split");
+                    await console.Output.WriteLineAsync($"Start audio split");
                     break;
                 case StandardOutputCommandEvent stdOut:
-                    Console.WriteLine(stdOut.Text);
+                    await console.Output.WriteLineAsync(stdOut.Text);
                     break;
                 case StandardErrorCommandEvent stdErr:
-                    Console.WriteLine(stdErr.Text);
+                    await console.Output.WriteLineAsync(stdErr.Text);
                     break;
             }
         }
@@ -277,7 +286,7 @@ internal static class Program
         File.Delete(audioInputPath);
     }
 
-    private static async Task<string> GetAudioInputPath(string tempDir, string toolPath, string link)
+    private static async Task<string> GetAudioInputPath(string tempDir, string toolPath, string link, IConsole console)
     {
         try
         {
@@ -292,13 +301,13 @@ internal static class Program
                 switch (cmdEvent)
                 {
                     case StartedCommandEvent:
-                        Console.WriteLine($"Start download audio");
+                        await console.Output.WriteLineAsync($"Start download audio");
                         break;
                     case StandardOutputCommandEvent stdOut:
-                        Console.WriteLine(stdOut.Text);
+                        await console.Output.WriteLineAsync(stdOut.Text);
                         break;
                     case StandardErrorCommandEvent stdErr:
-                        Console.WriteLine(stdErr.Text);
+                        await console.Output.WriteLineAsync(stdErr.Text);
                         break;
                 }
             }
@@ -307,7 +316,7 @@ internal static class Program
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            await console.Output.WriteLineAsync(e.ToString());
             return "";
         }
     }
