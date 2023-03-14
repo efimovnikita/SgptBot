@@ -1,4 +1,5 @@
-﻿using CliFx;
+﻿using System.Diagnostics.CodeAnalysis;
+using CliFx;
 using CliFx.Attributes;
 using CliFx.Infrastructure;
 using CliWrap;
@@ -21,6 +22,7 @@ internal static class Program
 }
 
 [Command(Description = "Download subtitles from youtube videos")]
+[SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
 public class DefaultCommand : ICommand
 {
     [CommandOption("link", 'l', Description = "YouTube link", IsRequired = true)]
@@ -35,7 +37,7 @@ public class DefaultCommand : ICommand
     [CommandOption("tool-path", 'p', Description = "Path to yt-dlp tool", IsRequired = true)]
     public FileInfo ToolPath { get; init; }
 
-    [CommandOption("rewrite-subtitles", 'r', Description = "Rewrite subtitles?", IsRequired = false)]
+    [CommandOption("rewrite-subtitles", 'r', Description = "Rewrite and paraphrase subtitles?", IsRequired = false)]
     public bool RewriteSubtitles { get; init; } = false;
     
     [CommandOption("translate-subtitles", 't', Description = "Translate non English subtitles?", IsRequired = false)]
@@ -44,42 +46,14 @@ public class DefaultCommand : ICommand
     [CommandOption("output-dir", 'o', Description = "Path to output dir", IsRequired = true)]
     public DirectoryInfo OutputPath { get; init; }
     
-    
-    
-    
-    
-    
     public async ValueTask ExecuteAsync(IConsole console)
     {
-        #region Checks
-        
         string key = Environment.GetEnvironmentVariable("OPENAI_KEY");
-        if (String.IsNullOrWhiteSpace(key))
+        if (await CheckConditionsAsync(key, console) == false)
         {
-            await console.Output.WriteLineAsync("OPENAI_KEY env variable not set");
             return;
         }
         
-        if (await IsBinaryExists("whisper") == false || await IsBinaryExists("mp3splt") == false)
-        {
-            await console.Output.WriteLineAsync("Whisper tool OR mp3splt tool not found");
-            return;
-        }
-
-        if (ToolPath.Exists == false)
-        {
-            await console.Output.WriteLineAsync("yt-dlp tool not found");
-            return;
-        }
-
-        if (OutputPath.Exists == false)
-        {
-            await console.Output.WriteLineAsync("Output path not exists");
-            return;
-        }
-
-        #endregion
-
         string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(tempDir);
 
@@ -109,26 +83,7 @@ public class DefaultCommand : ICommand
         string[] files = Directory.GetFiles(outputDir);
         foreach (string file in files)
         {
-            // detect language
-            string language = await GetLanguage(file, console);
-            string arguments =
-                $"-c \"whisper '{file}' --output_format txt --output_dir '{outputDir}' {(language.Equals("English") == false && TranslateSubtitles ? $"--language {language} --task translate" : "")}\"";
-
-            Command cmd = Cli.Wrap("/bin/bash")
-                .WithArguments(arguments);
-            await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
-                switch (cmdEvent)
-                {
-                    case StartedCommandEvent:
-                        await console.Output.WriteLineAsync($"Process started; arguments: {arguments}");
-                        break;
-                    case StandardOutputCommandEvent stdOut:
-                        await console.Output.WriteLineAsync(stdOut.Text);
-                        break;
-                    case StandardErrorCommandEvent stdErr:
-                        await console.Output.WriteLineAsync(stdErr.Text);
-                        break;
-                }
+            await GetTranscript(file, outputDir, console);
         }
 
         string[] textFiles = Directory.GetFiles(outputDir, "*.txt", SearchOption.AllDirectories);
@@ -168,6 +123,58 @@ public class DefaultCommand : ICommand
         await File.WriteAllTextAsync(Path.Combine(outputDir, "simplified-output.txt"), concatenatedText);
 
         WriteAllFilesToOutputDir(outputDir);
+    }
+    
+    private async Task<bool> CheckConditionsAsync(string key, IConsole console)
+    {
+        if (String.IsNullOrWhiteSpace(key))
+        {
+            await console.Output.WriteLineAsync("OPENAI_KEY env variable not set");
+            return false;
+        }
+
+        if (await IsBinaryExists("whisper") == false || await IsBinaryExists("mp3splt") == false)
+        {
+            await console.Output.WriteLineAsync("Whisper tool OR mp3splt tool not found");
+            return false;
+        }
+
+        if (ToolPath.Exists == false)
+        {
+            await console.Output.WriteLineAsync("yt-dlp tool not found");
+            return false;
+        }
+
+        if (OutputPath.Exists == false)
+        {
+            await console.Output.WriteLineAsync("Output path not exists");
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task GetTranscript(string file, string outputDir, IConsole console)
+    {
+        string language = await GetLanguage(file, console);
+        string arguments =
+            $"-c \"whisper '{file}' --output_format txt --output_dir '{outputDir}' {(language.Equals("English") == false && TranslateSubtitles ? $"--language {language} --task translate" : "")}\"";
+
+        Command cmd = Cli.Wrap("/bin/bash")
+            .WithArguments(arguments);
+        await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
+            switch (cmdEvent)
+            {
+                case StartedCommandEvent:
+                    await console.Output.WriteLineAsync($"Process started; arguments: {arguments}");
+                    break;
+                case StandardOutputCommandEvent stdOut:
+                    await console.Output.WriteLineAsync(stdOut.Text);
+                    break;
+                case StandardErrorCommandEvent stdErr:
+                    await console.Output.WriteLineAsync(stdErr.Text);
+                    break;
+            }
     }
 
     private void WriteAllFilesToOutputDir(string outputDir)
@@ -222,6 +229,7 @@ public class DefaultCommand : ICommand
         return language;
     }
 
+    // ReSharper disable once CognitiveComplexity
     private static List<string> SplitTextIntoChunks(string text)
     {
         const int chunkSize = 3000;
@@ -259,8 +267,7 @@ public class DefaultCommand : ICommand
         }
 
         return chunks;
-    }
-
+    }    
     private static async Task SplitAudio(string audioInputPath, double start, double end, IConsole console)
     {
         Command cmd = Cli
