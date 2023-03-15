@@ -8,6 +8,7 @@ using CliWrap.Buffered;
 using CliWrap.EventStream;
 using OpenAI_API;
 using OpenAI_API.Chat;
+using Spectre.Console;
 
 namespace SubtitlesExtractorAndRewriter;
 
@@ -16,6 +17,9 @@ internal static class Program
     public static async Task<int> Main()
     {
         return await new CliApplicationBuilder()
+            .SetDescription("Get subtitles from YouTube videos.")
+            .SetTitle("Subtitle")
+            .SetVersion("v1.1.0")
             .AddCommandsFromThisAssembly()
             .Build()
             .RunAsync();
@@ -104,7 +108,7 @@ public class DefaultCommand : ICommand
             return;
         }
 
-        List<string> chunks = Library.SplitTextIntoChunks(concatenatedText);
+        List<string> chunks = Library.SplitTextIntoChunks(concatenatedText, 3000);
 
         OpenAIAPI api = new(key);
 
@@ -302,11 +306,14 @@ public class DefaultCommand : ICommand
     }
 }
 
-[Command("split")]
+[Command("split", Description = "Splits text file into chunks")]
 public class SplitCommand : ICommand
 {
     [CommandParameter(0, Description = "Path to the file that needs to be split into chunks")]
     public FileInfo Path { get; init; }
+    
+    [CommandOption("chunk-size", Description = "Chunk size", IsRequired = false)]
+    public int ChunkSize { get; init; } = 3000;
 
     public async ValueTask ExecuteAsync(IConsole console)
     {
@@ -316,15 +323,28 @@ public class SplitCommand : ICommand
             Environment.Exit(1);
         }
 
-        List<string> chunks = Library.SplitTextIntoChunks(await File.ReadAllTextAsync(Path.FullName));
-        StringBuilder sb = new StringBuilder();
-        foreach (string chunk in chunks)
+        List<string> chunks = Library.SplitTextIntoChunks(await File.ReadAllTextAsync(Path.FullName), ChunkSize);
+        if (chunks.Count > 0)
         {
+            await console.Output.WriteLineAsync();
+        }
+        
+        StringBuilder sb = new();
+        int chunksCount = chunks.Count;
+        for (int i = 0; i < chunksCount; i++)
+        {
+            string chunk = chunks[i];
+            Rule rule = new($"Chunk {i + 1}");
+            rule.RuleStyle("green");
+            AnsiConsole.Write(rule);
+            await console.Output.WriteLineAsync(chunk);
+            await console.Output.WriteLineAsync();
+
             sb.AppendLine(chunk);
             sb.AppendLine();
             sb.AppendLine();
         }
-        
+
         await File.WriteAllTextAsync(
             System.IO.Path.Combine(Path.DirectoryName!,
                 $"{System.IO.Path.GetFileNameWithoutExtension(Path.FullName)}_chunks.txt"),
@@ -336,16 +356,15 @@ public static class Library
 {
     
     // ReSharper disable once CognitiveComplexity
-    public static List<string> SplitTextIntoChunks(string text)
+    public static List<string> SplitTextIntoChunks(string text, int size)
     {
-        const int chunkSize = 3000;
         List<string> chunks = new();
         int start = 0;
         int end = 0;
 
         while (end < text.Length)
         {
-            end = start + chunkSize;
+            end = start + size;
 
             if (end >= text.Length)
             {
@@ -362,8 +381,8 @@ public static class Library
 
             if (splitIndex == -1 || splitIndex < start)
             {
-                chunks.Add(text.Substring(start, chunkSize));
-                start += chunkSize;
+                chunks.Add(text.Substring(start, size));
+                start += size;
             }
             else
             {
