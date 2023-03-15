@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using CliFx;
 using CliFx.Attributes;
 using CliFx.Infrastructure;
@@ -45,13 +46,16 @@ public class DefaultCommand : ICommand
     
     [CommandOption("output-dir", 'o', Description = "Path to output dir", IsRequired = true)]
     public DirectoryInfo OutputPath { get; init; }
+
+    [CommandOption("prompt", Description = "Text prompt for simplification", IsRequired = false)]
+    public string Prompt { get; init; } = "Rewrite this in more simple words and grammar. Try to preserve as many source text as possible. Just replace some difficult words. Keep the meaning same:";
     
     public async ValueTask ExecuteAsync(IConsole console)
     {
         string key = Environment.GetEnvironmentVariable("OPENAI_KEY");
         if (await CheckConditionsAsync(key, console) == false)
         {
-            return;
+            Environment.Exit(1);
         }
         
         string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
@@ -64,7 +68,7 @@ public class DefaultCommand : ICommand
         if (File.Exists(audioInputPath) == false)
         {
             await console.Output.WriteLineAsync("Something went wrong during audio download operation");
-            return;
+            Environment.Exit(1);
         }
 
         // split if needed
@@ -77,7 +81,7 @@ public class DefaultCommand : ICommand
         if (outputDir == null)
         {
             await console.Output.WriteLineAsync("Error getting audio input file path");
-            return;
+            Environment.Exit(1);
         }
 
         string[] files = Directory.GetFiles(outputDir);
@@ -100,7 +104,7 @@ public class DefaultCommand : ICommand
             return;
         }
 
-        List<string> chunks = SplitTextIntoChunks(concatenatedText);
+        List<string> chunks = Library.SplitTextIntoChunks(concatenatedText);
 
         OpenAIAPI api = new(key);
 
@@ -111,8 +115,7 @@ public class DefaultCommand : ICommand
 
             chat.AppendSystemMessage(
                 "I want you to act as an English translator. Translate the source text into English only if needed.");
-            chat.AppendUserInput(
-                "Rewrite this in more simple words and grammar. Try to preserve as many source text as possible. Just replace some difficult words. Keep the meaning same:");
+            chat.AppendUserInput(Prompt);
             chat.AppendUserInput(chunk);
 
             string response = await chat.GetResponseFromChatbot();
@@ -229,45 +232,6 @@ public class DefaultCommand : ICommand
         return language;
     }
 
-    // ReSharper disable once CognitiveComplexity
-    private static List<string> SplitTextIntoChunks(string text)
-    {
-        const int chunkSize = 3000;
-        List<string> chunks = new();
-        int start = 0;
-        int end = 0;
-
-        while (end < text.Length)
-        {
-            end = start + chunkSize;
-
-            if (end >= text.Length)
-            {
-                chunks.Add(text.Substring(start));
-                break;
-            }
-
-            int splitIndex = text.LastIndexOf('.', end);
-
-            if (splitIndex == -1 || splitIndex < start)
-            {
-                splitIndex = text.IndexOf(',', end);
-            }
-
-            if (splitIndex == -1 || splitIndex < start)
-            {
-                chunks.Add(text.Substring(start, chunkSize));
-                start += chunkSize;
-            }
-            else
-            {
-                chunks.Add(text.Substring(start, splitIndex - start + 1));
-                start = splitIndex + 1;
-            }
-        }
-
-        return chunks;
-    }    
     private static async Task SplitAudio(string audioInputPath, double start, double end, IConsole console)
     {
         Command cmd = Cli
@@ -335,5 +299,79 @@ public class DefaultCommand : ICommand
             .WithArguments($"-c \"which {binaryName}\"")
             .ExecuteBufferedAsync();
         return cmd.ExitCode == 0;
+    }
+}
+
+[Command("split")]
+public class SplitCommand : ICommand
+{
+    [CommandParameter(0, Description = "Path to the file that needs to be split into chunks")]
+    public FileInfo Path { get; init; }
+
+    public async ValueTask ExecuteAsync(IConsole console)
+    {
+        if (Path.Exists == false)
+        {
+            await console.Output.WriteLineAsync("File not found");
+            Environment.Exit(1);
+        }
+
+        List<string> chunks = Library.SplitTextIntoChunks(await File.ReadAllTextAsync(Path.FullName));
+        StringBuilder sb = new StringBuilder();
+        foreach (string chunk in chunks)
+        {
+            sb.AppendLine(chunk);
+            sb.AppendLine();
+            sb.AppendLine();
+        }
+        
+        await File.WriteAllTextAsync(
+            System.IO.Path.Combine(Path.DirectoryName!,
+                $"{System.IO.Path.GetFileNameWithoutExtension(Path.FullName)}_chunks.txt"),
+            sb.ToString().TrimEnd());
+    }
+}
+
+public static class Library
+{
+    
+    // ReSharper disable once CognitiveComplexity
+    public static List<string> SplitTextIntoChunks(string text)
+    {
+        const int chunkSize = 3000;
+        List<string> chunks = new();
+        int start = 0;
+        int end = 0;
+
+        while (end < text.Length)
+        {
+            end = start + chunkSize;
+
+            if (end >= text.Length)
+            {
+                chunks.Add(text.Substring(start));
+                break;
+            }
+
+            int splitIndex = text.LastIndexOf('.', end);
+
+            if (splitIndex == -1 || splitIndex < start)
+            {
+                splitIndex = text.IndexOf(',', end);
+            }
+
+            if (splitIndex == -1 || splitIndex < start)
+            {
+                chunks.Add(text.Substring(start, chunkSize));
+                start += chunkSize;
+            }
+            else
+            {
+                chunks.Add(text.Substring(start, splitIndex - start + 1));
+                start = splitIndex + 1;
+            }
+        }
+
+        return chunks;
     }
 }
