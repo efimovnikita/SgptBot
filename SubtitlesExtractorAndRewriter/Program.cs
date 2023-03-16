@@ -19,8 +19,8 @@ internal static class Program
     {
         return await new CliApplicationBuilder()
             .SetDescription("Get subtitles from YouTube videos.")
-            .SetTitle("Subtitle")
-            .SetVersion("v1.1.0")
+            .SetTitle("Subtitles")
+            .SetVersion("v1.2.0")
             .AddCommandsFromThisAssembly()
             .Build()
             .RunAsync();
@@ -45,9 +45,9 @@ public class DefaultCommand : ICommand
     
     [CommandOption("translate-subtitles", 't', Description = "Translate non English subtitles?", IsRequired = false)]
     public bool TranslateSubtitles { get; init; } = false;
-    
-    [CommandOption("output-dir", 'o', Description = "Path to output dir", IsRequired = true)]
-    public DirectoryInfo OutputPath { get; init; }
+
+    [CommandOption("output-dir", 'o', Description = "Path to output dir", IsRequired = false)]
+    public DirectoryInfo OutputPath { get; init; } = new("/home/maskedball/Downloads");
 
     [CommandOption("prompt", Description = "Text prompt for simplification", IsRequired = false)]
     public string Prompt { get; init; } = "Rewrite this in more simple words and grammar. Try to preserve as many source text as possible. Just replace some difficult words. Keep the meaning same:";
