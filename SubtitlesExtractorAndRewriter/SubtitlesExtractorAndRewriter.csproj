@@ -17,4 +17,13 @@
       <PackageReference Include="Spectre.Console" Version="0.46.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Resources" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="Resources\yt-dlp_linux" />
+      <EmbeddedResource Include="Resources\yt-dlp_linux" />
+    </ItemGroup>
+
 </Project>

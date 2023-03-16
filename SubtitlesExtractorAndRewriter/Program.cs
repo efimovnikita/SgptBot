@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text;
 using CliFx;
 using CliFx.Attributes;
@@ -39,9 +40,6 @@ public class DefaultCommand : ICommand
     [CommandOption("end-time", 'e', Description = "End time", IsRequired = false)]
     public double EndTime { get; init; } = 0;
     
-    [CommandOption("tool-path", 'p', Description = "Path to yt-dlp tool", IsRequired = true)]
-    public FileInfo ToolPath { get; init; }
-
     [CommandOption("rewrite-subtitles", 'r', Description = "Rewrite and paraphrase subtitles?", IsRequired = false)]
     public bool RewriteSubtitles { get; init; } = false;
     
@@ -68,7 +66,19 @@ public class DefaultCommand : ICommand
         // Register a handler to delete the temp directory when the application exits
         AppDomain.CurrentDomain.ProcessExit += (sender, e) => Directory.Delete(tempDir, true);
 
-        string audioInputPath = await GetAudioInputPath(tempDir, ToolPath.FullName, YoutubeLink, console);
+        string youtubeToolPath = await SaveEmbeddedResourceIntoFile("SubtitlesExtractorAndRewriter.Resources.yt-dlp_linux");
+        if (File.Exists(youtubeToolPath) == false)
+        {
+            await console.Output.WriteAsync("Youtube download tool not found");
+            Environment.Exit(1);
+        }
+        
+        // Grant execute permissions to the executable
+        await Cli.Wrap("chmod")
+            .WithArguments($"u+x \"{youtubeToolPath}\"")
+            .ExecuteAsync();
+
+        string audioInputPath = await GetAudioInputPath(tempDir, youtubeToolPath, YoutubeLink, console);
         if (File.Exists(audioInputPath) == false)
         {
             await console.Output.WriteLineAsync("Something went wrong during audio download operation");
@@ -132,6 +142,24 @@ public class DefaultCommand : ICommand
         WriteAllFilesToOutputDir(outputDir);
     }
     
+    private static async Task<string> SaveEmbeddedResourceIntoFile(string resourceName)
+    {
+        Assembly assembly = Assembly.GetExecutingAssembly();
+        await using Stream resourceStream = assembly.GetManifestResourceStream(resourceName);
+
+        if (resourceStream == null)
+        {
+            throw new ArgumentException($"Resource not found: {resourceName}");
+        }
+
+        string tempFilePath = Path.Combine(Path.GetTempPath(), resourceName.Split('.').Last());
+
+        await using FileStream fileStream = File.Create(tempFilePath);
+        await resourceStream.CopyToAsync(fileStream);
+
+        return tempFilePath;
+    }
+
     private async Task<bool> CheckConditionsAsync(string key, IConsole console)
     {
         if (String.IsNullOrWhiteSpace(key))
@@ -145,13 +173,7 @@ public class DefaultCommand : ICommand
             await console.Output.WriteLineAsync("Whisper tool OR mp3splt tool not found");
             return false;
         }
-
-        if (ToolPath.Exists == false)
-        {
-            await console.Output.WriteLineAsync("yt-dlp tool not found");
-            return false;
-        }
-
+        
         if (OutputPath.Exists == false)
         {
             await console.Output.WriteLineAsync("Output path not exists");
