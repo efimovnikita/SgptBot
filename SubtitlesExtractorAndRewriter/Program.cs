@@ -27,6 +27,14 @@ internal static class Program
     }
 }
 
+public enum ParaphrasePreset
+{
+    Simple,
+    Slang,
+    Formal,
+    Intermediate
+}
+
 [Command(Description = "Download subtitles from youtube videos")]
 [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
 public class DefaultCommand : ICommand
@@ -48,9 +56,21 @@ public class DefaultCommand : ICommand
 
     [CommandOption("output-dir", 'o', Description = "Path to output dir", IsRequired = false)]
     public DirectoryInfo OutputPath { get; init; } = new("/home/maskedball/Downloads");
-
-    [CommandOption("prompt", Description = "Text prompt for simplification", IsRequired = false)]
-    public string Prompt { get; init; } = "Rewrite this in more simple words and grammar. Try to preserve as many source text as possible. Just replace some difficult words. Keep the meaning same:";
+    
+    [CommandOption("preset", Description = "Preset for paraphrasing.")]
+    public ParaphrasePreset Preset { get; set; } = ParaphrasePreset.Intermediate;
+    
+    private string GetPromptForPreset()
+    {
+        return Preset switch
+        {
+            ParaphrasePreset.Simple => "Rewrite this text using simpler English words and grammar while preserving the meaning.",
+            ParaphrasePreset.Slang => "Rewrite this text using informal language and slang while keeping the original meaning.",
+            ParaphrasePreset.Formal => "Rewrite this text using formal language and professional tone while maintaining the original meaning.",
+            ParaphrasePreset.Intermediate => "Rewrite this text using only B1 English vocabulary while preserving the meaning. Aim for a language level that would be easily understood by a B1 English learner.",
+            _ => throw new ArgumentOutOfRangeException()
+        };
+    }
     
     public async ValueTask ExecuteAsync(IConsole console)
     {
@@ -128,8 +148,8 @@ public class DefaultCommand : ICommand
             Conversation chat = api.Chat.CreateConversation();
 
             chat.AppendSystemMessage(
-                "I want you to act as an English translator. Translate the source text into English only if needed.");
-            chat.AppendUserInput(Prompt);
+                "You are a helpful and advanced language model, GPT-3.5. Please paraphrase the following text using B1 English vocabulary that is easily understood by a B1 or B2 English learner. Keep the meaning of the text intact.");
+            chat.AppendUserInput(GetPromptForPreset());
             chat.AppendUserInput(chunk);
 
             string response = await chat.GetResponseFromChatbot();
@@ -417,7 +437,7 @@ public class RewriteCommand : ICommand
 
 public static class Library
 {
-    
+
     // ReSharper disable once CognitiveComplexity
     public static List<string> SplitTextIntoChunks(string text, int size)
     {
