@@ -119,13 +119,16 @@ public class DefaultCommand : ICommand
         OpenAIAPI api = new(key);
 
         concatenatedText = "";
+        string promptForPreset = GetPromptForPreset();
+        await console.Output.WriteLineAsync($"Preset prompt is: '{promptForPreset}'");
+        
         foreach (string chunk in chunks)
         {
             Conversation chat = api.Chat.CreateConversation();
 
             chat.AppendSystemMessage(
                 "You are a helpful and advanced language model, GPT-3.5. Please paraphrase the following text using B1 English vocabulary that is easily understood by a B1 or B2 English learner. Keep the meaning of the text intact.");
-            chat.AppendUserInput(GetPromptForPreset());
+            chat.AppendUserInput(promptForPreset);
             chat.AppendUserInput(chunk);
 
             string response = await chat.GetResponseFromChatbot();
