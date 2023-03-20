@@ -1,5 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Reflection;
+using System.Text;
+using System.Text.Json;
 using CliFx;
 using CliFx.Attributes;
 using CliFx.Infrastructure;
@@ -36,6 +40,9 @@ public class DefaultCommand : ICommand
     [CommandOption("preset", Description = "Preset for paraphrasing.")]
     public ParaphrasePreset Preset { get; set; } = ParaphrasePreset.Intermediate;
     
+    [CommandOption("lingq-import", Description = "Try import into Lingq.com as lesson?", IsRequired = false)]
+    public bool ImportLesson { get; init; } = false;
+    
     private string GetPromptForPreset()
     {
         return Preset switch
@@ -50,8 +57,10 @@ public class DefaultCommand : ICommand
     
     public async ValueTask ExecuteAsync(IConsole console)
     {
-        string key = Environment.GetEnvironmentVariable("OPENAI_KEY");
-        if (await CheckConditionsAsync(key, console) == false)
+        string openAiKey = Environment.GetEnvironmentVariable("OPENAI_KEY");
+        string lingqCookie = Environment.GetEnvironmentVariable("LINGQ_COOKIE");
+
+        if (await CheckConditionsAsync(openAiKey, lingqCookie, RewriteSubtitles, ImportLesson, console) == false)
         {
             Environment.Exit(1);
         }
@@ -110,13 +119,14 @@ public class DefaultCommand : ICommand
 
         if (RewriteSubtitles == false)
         {
+            await ImportLessonIntoLingqAccount(youtubeToolPath, lingqCookie, concatenatedText, console);
             WriteAllFilesToOutputDir(outputDir);
             return;
         }
 
         List<string> chunks = Library.SplitTextIntoChunks(concatenatedText, 3000);
 
-        OpenAIAPI api = new(key);
+        OpenAIAPI api = new(lingqCookie);
 
         concatenatedText = "";
         string promptForPreset = GetPromptForPreset();
@@ -136,11 +146,60 @@ public class DefaultCommand : ICommand
             concatenatedText += response;
         }
 
+        await ImportLessonIntoLingqAccount(youtubeToolPath, lingqCookie, concatenatedText, console);
         await File.WriteAllTextAsync(Path.Combine(outputDir, "simplified-output.txt"), concatenatedText);
 
         WriteAllFilesToOutputDir(outputDir);
     }
-    
+
+    private async Task ImportLessonIntoLingqAccount(string youtubeToolPath, string cookie, string text,
+        IConsole console)
+    {
+        if (ImportLesson)
+        {
+            BufferedCommandResult titleResult = await Cli
+                .Wrap("/bin/bash")
+                .WithArguments($"-c \"{youtubeToolPath} --get-title '{YoutubeLink}'\"")
+                .ExecuteBufferedAsync();
+            string title = titleResult.StandardOutput;
+            if (String.IsNullOrWhiteSpace(title) == false)
+            {
+                HttpStatusCode statusCode = await ImportLessonIntoLingq(cookie, title, text);
+                await console.Output.WriteLineAsync(statusCode != HttpStatusCode.Created
+                    ? $"Lesson import was unsuccessful: {statusCode}"
+                    : "Lesson import was successful!");
+            }
+        }
+    }
+
+    private static async Task<HttpStatusCode> ImportLessonIntoLingq(string cookie, string title, string text)
+    {
+        HttpClientHandler clientHandler = new() {UseCookies = true};
+        HttpClient client = new(clientHandler);
+
+        var content = new
+        {
+            title,
+            text,
+            tags = Array.Empty<string>()
+        };
+
+        string json = JsonSerializer.Serialize(content);
+
+        HttpRequestMessage request = new()
+        {
+            Method = HttpMethod.Post,
+            RequestUri = new Uri("https://www.lingq.com/api/v2/en/lessons/"),
+            Headers = {{"cookie", cookie}, {"accept", "application/json"}, {"authority", "www.lingq.com"},},
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+            {
+                Headers = {ContentType = new MediaTypeHeaderValue("application/json")}
+            }
+        };
+        using HttpResponseMessage response = await client.SendAsync(request);
+        return response.StatusCode;
+    }
+
     private static async Task<string> SaveEmbeddedResourceIntoFile(string resourceName)
     {
         Assembly assembly = Assembly.GetExecutingAssembly();
@@ -159,9 +218,17 @@ public class DefaultCommand : ICommand
         return tempFilePath;
     }
 
-    private async Task<bool> CheckConditionsAsync(string key, IConsole console)
+    private async Task<bool> CheckConditionsAsync(string openAiKey,
+        string lingqCookie, bool rewriteSubtitles,
+        bool importLesson, IConsole console)
     {
-        if (String.IsNullOrWhiteSpace(key))
+        if (String.IsNullOrWhiteSpace(lingqCookie) && importLesson)
+        {
+            await console.Output.WriteLineAsync("LINGQ_COOKIE env variable not set");
+            return false;
+        }
+        
+        if (String.IsNullOrWhiteSpace(openAiKey) && rewriteSubtitles)
         {
             await console.Output.WriteLineAsync("OPENAI_KEY env variable not set");
             return false;
