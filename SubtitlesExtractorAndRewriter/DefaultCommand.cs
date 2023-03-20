@@ -126,7 +126,7 @@ public class DefaultCommand : ICommand
 
         List<string> chunks = Library.SplitTextIntoChunks(concatenatedText, 3000);
 
-        OpenAIAPI api = new(lingqCookie);
+        OpenAIAPI api = new(openAiKey);
 
         concatenatedText = "";
         string promptForPreset = GetPromptForPreset();
