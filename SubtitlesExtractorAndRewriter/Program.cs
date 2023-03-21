@@ -9,7 +9,8 @@ internal static class Program
         return await new CliApplicationBuilder()
             .SetDescription("Get subtitles from YouTube videos.")
             .SetTitle("Subtitles")
-            .SetVersion("v1.3.0")
+            .SetVersion("v1.5.0")
+            .SetExecutableName("subtitles")
             .AddCommandsFromThisAssembly()
             .Build()
             .RunAsync();
