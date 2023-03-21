@@ -222,31 +222,33 @@ public class DefaultCommand : ICommand
         string lingqCookie, bool rewriteSubtitles,
         bool importLesson, IConsole console)
     {
+        bool result = true;
+        
         if (String.IsNullOrWhiteSpace(lingqCookie) && importLesson)
         {
+            result = false;
             await console.Output.WriteLineAsync("LINGQ_COOKIE env variable not set");
-            return false;
         }
         
         if (String.IsNullOrWhiteSpace(openAiKey) && rewriteSubtitles)
         {
+            result = false;
             await console.Output.WriteLineAsync("OPENAI_KEY env variable not set");
-            return false;
         }
 
         if (await IsBinaryExists("whisper") == false || await IsBinaryExists("mp3splt") == false)
         {
+            result = false;
             await console.Output.WriteLineAsync("Whisper tool OR mp3splt tool not found");
-            return false;
         }
         
         if (OutputPath.Exists == false)
         {
+            result = false;
             await console.Output.WriteLineAsync("Output path not exists");
-            return false;
         }
 
-        return true;
+        return result;
     }
 
     private async Task GetTranscript(string file, string outputDir, IConsole console)
