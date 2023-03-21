@@ -40,7 +40,7 @@ public class DefaultCommand : ICommand
     [CommandOption("preset", Description = "Preset for paraphrasing.")]
     public ParaphrasePreset Preset { get; set; } = ParaphrasePreset.Intermediate;
     
-    [CommandOption("lingq-import", Description = "Try import into Lingq.com as lesson?", IsRequired = false)]
+    [CommandOption("import-to-lingq", 'i', Description = "Try import into Lingq.com as lesson?", IsRequired = false)]
     public bool ImportLesson { get; init; } = false;
     
     private string GetPromptForPreset()
