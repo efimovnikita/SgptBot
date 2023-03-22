@@ -12,6 +12,7 @@ using CliWrap.Buffered;
 using CliWrap.EventStream;
 using OpenAI_API;
 using OpenAI_API.Chat;
+using Spectre.Console;
 
 namespace SubtitlesExtractorAndRewriter;
 
@@ -55,58 +56,110 @@ public class DefaultCommand : ICommand
         };
     }
     
+    // ReSharper disable once CognitiveComplexity
     public async ValueTask ExecuteAsync(IConsole console)
     {
         string openAiKey = Environment.GetEnvironmentVariable("OPENAI_KEY");
         string lingqCookie = Environment.GetEnvironmentVariable("LINGQ_COOKIE");
 
-        if (await CheckConditionsAsync(openAiKey, lingqCookie, RewriteSubtitles, ImportLesson, console) == false)
-        {
-            Environment.Exit(1);
-        }
-        
-        string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(tempDir);
+        const string requirementsMsg = "Checking requirements...";
+        await AnsiConsole.Status()
+            .StartAsync(requirementsMsg, async _ => 
+            {
+                if (await CheckConditionsAsync(openAiKey, lingqCookie, RewriteSubtitles, ImportLesson, console) == false)
+                {
+                    Environment.Exit(1);
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"[grey]LOG:[/] {requirementsMsg}[green]OK[/]");
+                }
+            });
+
+        string tempDir = null;
+        const string tempDirMsg = "Creating temp dir...";
+        AnsiConsole.Status()
+            .Start(tempDirMsg, _ => 
+            {
+                tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                Directory.CreateDirectory(tempDir);
+                AnsiConsole.MarkupLine($"[grey]LOG:[/] {tempDirMsg}[green]{tempDir}[/]");
+            });
 
         // Register a handler to delete the temp directory when the application exits
-        AppDomain.CurrentDomain.ProcessExit += (sender, e) => Directory.Delete(tempDir, true);
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Directory.Delete(tempDir, true);
 
-        string youtubeToolPath = await SaveEmbeddedResourceIntoFile("SubtitlesExtractorAndRewriter.Resources.yt-dlp_linux");
-        if (File.Exists(youtubeToolPath) == false)
-        {
-            await console.Output.WriteAsync("Youtube download tool not found");
-            Environment.Exit(1);
-        }
+        string youtubeToolPath = null;
+        const string resourcesMsg = "Saving embedded resource into file...";
+        await AnsiConsole.Status()
+            .StartAsync(resourcesMsg, async _ =>
+            {
+                youtubeToolPath = await SaveEmbeddedResourceIntoFile("SubtitlesExtractorAndRewriter.Resources.yt-dlp_linux");
+                if (File.Exists(youtubeToolPath) == false)
+                {
+                    AnsiConsole.MarkupLine($"[grey]LOG:[/] {resourcesMsg}[red]fail[/]");
+                    Environment.Exit(1);
+                }
+                
+                AnsiConsole.MarkupLine($"[grey]LOG:[/] {resourcesMsg}[green]OK[/]");
+            });
+
+        const string permissionsMsg = "Grant execute permissions...";
+        await AnsiConsole.Status()
+            .StartAsync(permissionsMsg, async _ => 
+            {
+                // Grant execute permissions to the executable
+                await Cli.Wrap("chmod")
+                    .WithArguments($"u+x \"{youtubeToolPath}\"")
+                    .ExecuteAsync();
+                
+                AnsiConsole.MarkupLine($"[grey]LOG:[/] {permissionsMsg}[green]OK[/]");
+            });
+
+        string audioInputPath = null;
+        const string getAudioMsg = "Getting audio from youtube...";
+        await AnsiConsole.Status()
+            .StartAsync(getAudioMsg, async _ =>
+            {
+                audioInputPath = await GetAudioInputPath(tempDir, youtubeToolPath, YoutubeLink, console);
+                if (File.Exists(audioInputPath) == false)
+                {
+                    AnsiConsole.MarkupLine($"[grey]LOG:[/] {getAudioMsg}[red]fail[/]");
+                    Environment.Exit(1);
+                }
+                
+                AnsiConsole.MarkupLine($"[grey]LOG:[/] {getAudioMsg}[green]OK[/]");
+            });
         
-        // Grant execute permissions to the executable
-        await Cli.Wrap("chmod")
-            .WithArguments($"u+x \"{youtubeToolPath}\"")
-            .ExecuteAsync();
-
-        string audioInputPath = await GetAudioInputPath(tempDir, youtubeToolPath, YoutubeLink, console);
-        if (File.Exists(audioInputPath) == false)
-        {
-            await console.Output.WriteLineAsync("Something went wrong during audio download operation");
-            Environment.Exit(1);
-        }
-
         // split if needed
         if (EndTime != 0.0)
         {
-            await SplitAudio(audioInputPath, StartTime, EndTime, console);
+            const string status = "Splitting audio...";
+            await AnsiConsole.Status()
+                .StartAsync(status, async _ =>
+                {
+                    await SplitAudio(audioInputPath, StartTime, EndTime);
+                    const string splitAudioMsg = $"[grey]LOG:[/] {status}[green]OK[/]";
+                    AnsiConsole.MarkupLine(splitAudioMsg);
+                });
         }
         
         string outputDir = Path.GetDirectoryName(audioInputPath);
         if (outputDir == null)
         {
-            await console.Output.WriteLineAsync("Error getting audio input file path");
             Environment.Exit(1);
         }
 
         string[] files = Directory.GetFiles(outputDir);
         foreach (string file in files)
         {
-            await GetTranscript(file, outputDir, console);
+            string status = $"Getting transcript for file '{file}'...";
+            await AnsiConsole.Status()
+                .StartAsync(status, async _ => 
+                {
+                    await GetTranscript(file, outputDir);
+                    AnsiConsole.MarkupLine($"[grey]LOG:[/] {status}[green]OK[/]");
+                });
         }
 
         string[] textFiles = Directory.GetFiles(outputDir, "*.txt", SearchOption.AllDirectories);
@@ -119,7 +172,7 @@ public class DefaultCommand : ICommand
 
         if (RewriteSubtitles == false)
         {
-            await ImportLessonIntoLingqAccount(youtubeToolPath, lingqCookie, concatenatedText, console);
+            await ImportLessonIntoLingqAccount(youtubeToolPath, lingqCookie, concatenatedText);
             WriteAllFilesToOutputDir(outputDir);
             return;
         }
@@ -130,45 +183,55 @@ public class DefaultCommand : ICommand
 
         concatenatedText = "";
         string promptForPreset = GetPromptForPreset();
-        await console.Output.WriteLineAsync($"Preset prompt is: '{promptForPreset}'");
-        
-        foreach (string chunk in chunks)
-        {
-            Conversation chat = api.Chat.CreateConversation();
 
-            chat.AppendSystemMessage(
-                "You are a helpful and advanced language model, GPT-3.5. Please paraphrase the following text using B1 English vocabulary that is easily understood by a B1 or B2 English learner. Keep the meaning of the text intact.");
-            chat.AppendUserInput(promptForPreset);
-            chat.AppendUserInput(chunk);
+        const string askingGpt = "Asking ChatGPT...";
+        await AnsiConsole.Status()
+            .StartAsync(askingGpt, async _ => 
+            {
+                foreach (string chunk in chunks)
+                {
+                    Conversation chat = api.Chat.CreateConversation();
 
-            string response = await chat.GetResponseFromChatbot();
-            await console.Output.WriteLineAsync(response);
-            concatenatedText += response;
-        }
+                    chat.AppendSystemMessage(
+                        "You are a helpful and advanced language model, GPT-3.5. Please paraphrase the following text using B1 English vocabulary that is easily understood by a B1 or B2 English learner. Keep the meaning of the text intact.");
+                    chat.AppendUserInput(promptForPreset);
+                    chat.AppendUserInput(chunk);
 
-        await ImportLessonIntoLingqAccount(youtubeToolPath, lingqCookie, concatenatedText, console);
+                    string response = await chat.GetResponseFromChatbot();
+                    concatenatedText += response;
+                }
+                
+                AnsiConsole.MarkupLine($"[grey]LOG:[/] {askingGpt}[green]OK[/]");
+            });
+
+        await ImportLessonIntoLingqAccount(youtubeToolPath, lingqCookie, concatenatedText);
         await File.WriteAllTextAsync(Path.Combine(outputDir, "simplified-output.txt"), concatenatedText);
 
         WriteAllFilesToOutputDir(outputDir);
     }
 
-    private async Task ImportLessonIntoLingqAccount(string youtubeToolPath, string cookie, string text,
-        IConsole console)
+    private async Task ImportLessonIntoLingqAccount(string youtubeToolPath, string cookie, string text)
     {
         if (ImportLesson)
         {
-            BufferedCommandResult titleResult = await Cli
-                .Wrap("/bin/bash")
-                .WithArguments($"-c \"{youtubeToolPath} --get-title '{YoutubeLink}'\"")
-                .ExecuteBufferedAsync();
-            string title = titleResult.StandardOutput;
-            if (String.IsNullOrWhiteSpace(title) == false)
-            {
-                HttpStatusCode statusCode = await ImportLessonIntoLingq(cookie, title, text);
-                await console.Output.WriteLineAsync(statusCode != HttpStatusCode.Created
-                    ? $"Lesson import was unsuccessful: {statusCode}"
-                    : "Lesson import was successful!");
-            }
+            const string msg = "Importing lesson into lingq account...";
+
+            await AnsiConsole.Status()
+                .StartAsync(msg, async _ => 
+                {
+                    BufferedCommandResult titleResult = await Cli
+                        .Wrap("/bin/bash")
+                        .WithArguments($"-c \"{youtubeToolPath} --get-title '{YoutubeLink}'\"")
+                        .ExecuteBufferedAsync();
+                    string title = titleResult.StandardOutput;
+                    if (String.IsNullOrWhiteSpace(title) == false)
+                    {
+                        HttpStatusCode statusCode = await ImportLessonIntoLingq(cookie, title, text);
+                        AnsiConsole.MarkupLine(statusCode == HttpStatusCode.Created
+                            ? $"[grey]LOG:[/] {msg}[green]OK[/]"
+                            : $"[grey]LOG:[/] {msg}[red]fail[/]");
+                    }
+                });
         }
     }
 
@@ -251,27 +314,15 @@ public class DefaultCommand : ICommand
         return result;
     }
 
-    private async Task GetTranscript(string file, string outputDir, IConsole console)
+    private async Task GetTranscript(string file, string outputDir)
     {
-        string language = await GetLanguage(file, console);
+        string language = await GetLanguage(file);
         string arguments =
             $"-c \"whisper '{file}' --output_format txt --output_dir '{outputDir}' {(language.Equals("English") == false && TranslateSubtitles ? $"--language {language} --task translate" : "")}\"";
 
-        Command cmd = Cli.Wrap("/bin/bash")
-            .WithArguments(arguments);
-        await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
-            switch (cmdEvent)
-            {
-                case StartedCommandEvent:
-                    await console.Output.WriteLineAsync($"Process started; arguments: {arguments}");
-                    break;
-                case StandardOutputCommandEvent stdOut:
-                    await console.Output.WriteLineAsync(stdOut.Text);
-                    break;
-                case StandardErrorCommandEvent stdErr:
-                    await console.Output.WriteLineAsync(stdErr.Text);
-                    break;
-            }
+        await Cli.Wrap("/bin/bash")
+            .WithArguments(arguments)
+            .ExecuteBufferedAsync();
     }
 
     private void WriteAllFilesToOutputDir(string outputDir)
@@ -284,7 +335,7 @@ public class DefaultCommand : ICommand
         }
     }
 
-    private static async Task<string> GetLanguage(string file, IConsole console)
+    private static async Task<string> GetLanguage(string file)
     {
         string language = "English";
 
@@ -299,18 +350,12 @@ public class DefaultCommand : ICommand
             {
                 switch (cmdEvent)
                 {
-                    case StartedCommandEvent:
-                    {
-                        await console.Output.WriteLineAsync("Detecting language");
-                        break;
-                    }
                     case StandardOutputCommandEvent stdOut:
                     {
                         if (stdOut.Text.Contains("Detected language"))
                         {
                             cts.Cancel();
                             language = stdOut.Text.Split(":")[1].Trim();
-                            await console.Output.WriteLineAsync($"Language found: {language}");
                             return language;
                         }
                         break;
@@ -326,29 +371,13 @@ public class DefaultCommand : ICommand
         return language;
     }
 
-    private static async Task SplitAudio(string audioInputPath, double start, double end, IConsole console)
+    private static async Task SplitAudio(string audioPath, double start, double end)
     {
-        Command cmd = Cli
-            .Wrap("/bin/bash")
-            .WithArguments($"-c \"mp3splt {audioInputPath} {start.ToString("F2")} {end.ToString("F2")}\"");
-        
-        await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
-        {
-            switch (cmdEvent)
-            {
-                case StartedCommandEvent:
-                    await console.Output.WriteLineAsync($"Start audio split");
-                    break;
-                case StandardOutputCommandEvent stdOut:
-                    await console.Output.WriteLineAsync(stdOut.Text);
-                    break;
-                case StandardErrorCommandEvent stdErr:
-                    await console.Output.WriteLineAsync(stdErr.Text);
-                    break;
-            }
-        }
+        await Cli.Wrap("/bin/bash")
+            .WithArguments($"-c \"mp3splt {audioPath} {start.ToString("F2")} {end.ToString("F2")}\"")
+            .ExecuteBufferedAsync();
 
-        File.Delete(audioInputPath);
+        File.Delete(audioPath);
     }
 
     private static async Task<string> GetAudioInputPath(string tempDir, string toolPath, string link, IConsole console)
@@ -357,25 +386,10 @@ public class DefaultCommand : ICommand
         {
             string audioInputPath = Path.Combine(tempDir, "input.mp3");
 
-            Command cmd = Cli
+            await Cli
                 .Wrap("/bin/bash")
-                .WithArguments($"-c \"{toolPath} -x --audio-format mp3 '{link}' -o '{audioInputPath}'\"");
-            
-            await foreach (CommandEvent cmdEvent in cmd.ListenAsync())
-            {
-                switch (cmdEvent)
-                {
-                    case StartedCommandEvent:
-                        await console.Output.WriteLineAsync($"Start download audio");
-                        break;
-                    case StandardOutputCommandEvent stdOut:
-                        await console.Output.WriteLineAsync(stdOut.Text);
-                        break;
-                    case StandardErrorCommandEvent stdErr:
-                        await console.Output.WriteLineAsync(stdErr.Text);
-                        break;
-                }
-            }
+                .WithArguments($"-c \"{toolPath} -x --audio-format mp3 '{link}' -o '{audioInputPath}'\"")
+                .ExecuteBufferedAsync();
             
             return audioInputPath;
         }
