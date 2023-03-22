@@ -52,6 +52,7 @@ public class DefaultCommand : ICommand
             ParaphrasePreset.Slang => "Rewrite this text using informal language and slang while keeping the original meaning.",
             ParaphrasePreset.Formal => "Rewrite this text using formal language and professional tone while maintaining the original meaning.",
             ParaphrasePreset.Intermediate => "Rewrite this text using only B1 English vocabulary while preserving the meaning. Aim for a language level that would be easily understood by a B1 English learner.",
+            ParaphrasePreset.Summarize => "Summarize (in English) this text by condensing the main ideas into a shorter version while maintaining the essential meaning.",
             _ => throw new ArgumentOutOfRangeException()
         };
     }

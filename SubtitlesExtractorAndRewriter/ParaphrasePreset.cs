@@ -5,5 +5,6 @@ public enum ParaphrasePreset
     Simple,
     Slang,
     Formal,
-    Intermediate
+    Intermediate,
+    Summarize
 }
