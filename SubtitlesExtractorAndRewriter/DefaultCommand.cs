@@ -234,10 +234,10 @@ public class DefaultCommand : ICommand
                     
                     AnsiConsole.MarkupLine($"[grey]LOG:[/] {askingGpt}[green]OK[/]");
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
                     errorDuringTalking = true;
-                    AnsiConsole.MarkupLine($"[grey]LOG:[/] {askingGpt}[red]fail[/]");
+                    AnsiConsole.MarkupLine($"[grey]LOG:[/] {askingGpt}[red]fail: {e.Message}[/]");
                 }
             });
         if (errorDuringTalking)
@@ -288,22 +288,29 @@ public class DefaultCommand : ICommand
         {
             const string msg = "Importing lesson into lingq account...";
 
-            await AnsiConsole.Status()
-                .StartAsync(msg, async _ => 
-                {
-                    BufferedCommandResult titleResult = await Cli
-                        .Wrap("/bin/bash")
-                        .WithArguments($"-c \"{youtubeToolPath} --get-title '{YoutubeLink}'\"")
-                        .ExecuteBufferedAsync();
-                    string title = titleResult.StandardOutput;
-                    if (String.IsNullOrWhiteSpace(title) == false)
+            try
+            {
+                await AnsiConsole.Status()
+                    .StartAsync(msg, async _ => 
                     {
-                        HttpStatusCode statusCode = await ImportLessonIntoLingq(cookie, title, text);
-                        AnsiConsole.MarkupLine(statusCode == HttpStatusCode.Created
-                            ? $"[grey]LOG:[/] {msg}[green]OK[/]"
-                            : $"[grey]LOG:[/] {msg}[red]fail[/]");
-                    }
-                });
+                        BufferedCommandResult titleResult = await Cli
+                            .Wrap("/bin/bash")
+                            .WithArguments($"-c \"{youtubeToolPath} --get-title '{YoutubeLink}'\"")
+                            .ExecuteBufferedAsync();
+                        string title = titleResult.StandardOutput;
+                        if (String.IsNullOrWhiteSpace(title) == false)
+                        {
+                            HttpStatusCode statusCode = await ImportLessonIntoLingq(cookie, title, text);
+                            AnsiConsole.MarkupLine(statusCode == HttpStatusCode.Created
+                                ? $"[grey]LOG:[/] {msg}[green]OK[/]"
+                                : $"[grey]LOG:[/] {msg}[red]fail[/]");
+                        }
+                    });
+            }
+            catch (Exception)
+            {
+                AnsiConsole.MarkupLine($"[grey]LOG:[/] {msg}[red]fail[/]");
+            }
         }
     }
 
