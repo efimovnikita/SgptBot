@@ -484,9 +484,8 @@ public class DefaultCommand : ICommand
             
             return audioInputPath;
         }
-        catch (Exception e)
+        catch (Exception)
         {
-            await console.Output.WriteLineAsync(e.ToString());
             return "";
         }
     }
