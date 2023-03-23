@@ -136,7 +136,7 @@ public class DefaultCommand : ICommand
         await AnsiConsole.Status()
             .StartAsync(getAudioMsg, async _ =>
             {
-                audioInputPath = await GetAudioInputPath(tempDir, youtubeToolPath, YoutubeLink, console);
+                audioInputPath = await GetAudioInputPath(tempDir, youtubeToolPath, YoutubeLink);
                 AnsiConsole.MarkupLine(File.Exists(audioInputPath) == false
                     ? $"[grey]LOG:[/] {getAudioMsg}[red]fail[/]"
                     : $"[grey]LOG:[/] {getAudioMsg}[green]OK[/]");
@@ -471,7 +471,7 @@ public class DefaultCommand : ICommand
         }
     }
 
-    private static async Task<string> GetAudioInputPath(string tempDir, string toolPath, string link, IConsole console)
+    private static async Task<string> GetAudioInputPath(string tempDir, string toolPath, string link)
     {
         try
         {
