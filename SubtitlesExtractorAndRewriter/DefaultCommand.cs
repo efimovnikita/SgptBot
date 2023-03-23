@@ -231,14 +231,14 @@ public class DefaultCommand : ICommand
                         string response = await chat.GetResponseFromChatbot();
                         concatenatedText += response;
                     }
+                    
+                    AnsiConsole.MarkupLine($"[grey]LOG:[/] {askingGpt}[green]OK[/]");
                 }
                 catch (Exception)
                 {
                     errorDuringTalking = true;
                     AnsiConsole.MarkupLine($"[grey]LOG:[/] {askingGpt}[red]fail[/]");
                 }
-                
-                AnsiConsole.MarkupLine($"[grey]LOG:[/] {askingGpt}[green]OK[/]");
             });
         if (errorDuringTalking)
         {
