@@ -465,7 +465,7 @@ public class DefaultCommand : ICommand
         try
         {
             await Cli.Wrap("/bin/bash")
-                .WithArguments($"-c \"mp3splt {audioPath} {start.ToString("F2")} {end.ToString("F2")}\"")
+                .WithArguments($"-c \"mp3splt {audioPath} {start:F2} {end:F2}\"")
                 .ExecuteBufferedAsync();
 
             File.Delete(audioPath);
