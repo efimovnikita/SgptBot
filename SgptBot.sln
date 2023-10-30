@@ -2,12 +2,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgptBot", "SgptBot\SgptBot.csproj", "{74F59239-C798-4F77-B6A7-65D9E6308202}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpGPT", "SharpGPT\SharpGPT.csproj", "{894EA047-2B29-4671-814E-5B92AD812F98}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParaphrasmApi", "ParaphrasmApi\ParaphrasmApi.csproj", "{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesConverter", "SubtitlesConverter\SubtitlesConverter.csproj", "{9CC8DD5F-9778-4D6B-8101-A2D68BBA0D9D}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesSplitter", "SubtitlesSplitter\SubtitlesSplitter.csproj", "{0304F683-BCB8-4154-8E11-9598A0C3B889}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesApi", "SubtitlesApi\SubtitlesApi.csproj", "{D496D0B8-8841-449E-9A7E-2AB0658ECFFB}"
@@ -24,18 +18,6 @@ Global
 		{74F59239-C798-4F77-B6A7-65D9E6308202}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{74F59239-C798-4F77-B6A7-65D9E6308202}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{74F59239-C798-4F77-B6A7-65D9E6308202}.Release|Any CPU.Build.0 = Release|Any CPU
-		{894EA047-2B29-4671-814E-5B92AD812F98}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{894EA047-2B29-4671-814E-5B92AD812F98}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{894EA047-2B29-4671-814E-5B92AD812F98}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{894EA047-2B29-4671-814E-5B92AD812F98}.Release|Any CPU.Build.0 = Release|Any CPU
-		{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{49043D0A-2F60-43FC-B649-A0DCEDAFAFB2}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9CC8DD5F-9778-4D6B-8101-A2D68BBA0D9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{9CC8DD5F-9778-4D6B-8101-A2D68BBA0D9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{9CC8DD5F-9778-4D6B-8101-A2D68BBA0D9D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{9CC8DD5F-9778-4D6B-8101-A2D68BBA0D9D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0304F683-BCB8-4154-8E11-9598A0C3B889}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0304F683-BCB8-4154-8E11-9598A0C3B889}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0304F683-BCB8-4154-8E11-9598A0C3B889}.Release|Any CPU.ActiveCfg = Release|Any CPU

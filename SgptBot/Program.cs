@@ -1,83 +1,126 @@
-﻿using System.CommandLine;
-using System.CommandLine.Parsing;
-using System.Text.RegularExpressions;
+﻿using System.Security.Cryptography;
+using System.Text;
+using LiteDB;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using SgptBot.Models;
+using SgptBot.Services;
+using Telegram.Bot;
 
-namespace SgptBot;
+IHost host = Host.CreateDefaultBuilder(args)
+    .ConfigureServices((context, services) =>
+    {
+        var token = Environment.GetEnvironmentVariable("TOKEN");
+        if(string.IsNullOrEmpty(token))
+        {
+            throw new ArgumentNullException("TOKEN", "Environment variable TOKEN is not set.");
+        }
 
-public static class Program
+        var adminId = Environment.GetEnvironmentVariable("ADMIN");
+        if (adminId == null)
+        {
+            throw new ArgumentNullException("ADMIN", "Environment variable ADMIN is not set.");
+        }
+        
+        var dbFolder = Environment.GetEnvironmentVariable("DB");
+        if (dbFolder == null)
+        {
+            throw new ArgumentNullException("DB", "Environment variable DB is not set.");
+        }
+
+        var dbPassword = Environment.GetEnvironmentVariable("PASSWORD");
+        if (dbPassword == null)
+        {
+            throw new ArgumentNullException("PASSWORD", "Environment variable PASSWORD is not set.");
+        }
+
+        services.AddHttpClient("telegram_bot_client")
+            .AddTypedClient<ITelegramBotClient>((httpClient, sp) =>
+            {
+                TelegramBotClientOptions options = new TelegramBotClientOptions(token);
+                return new TelegramBotClient(options, httpClient);
+            });
+        
+        services.AddSingleton(new ApplicationSettings(Int32.Parse(adminId), dbFolder, dbPassword));
+        services.AddSingleton(new UserRepository("store", dbFolder, dbPassword));
+
+        services.AddScoped<UpdateHandler>();
+        services.AddScoped<ReceiverService>();
+        services.AddHostedService<PollingService>();
+    })
+    .Build();
+
+await host.RunAsync();
+
+public class ApplicationSettings 
 {
-    private static void Main(string[] args)
+    public long AdminId { get; }
+    public string DbConnectionString { get; }
+    public string DbPassword { get; }
+
+    public ApplicationSettings(long adminId, string dbConnectionString, string dbPassword)
     {
-        Option<string> keyOption = new("--key", "Telegram API key")
-        {
-            IsRequired = true
-        };
-        keyOption.AddAlias("-k");
+        AdminId = adminId;
+        DbConnectionString = dbConnectionString;
+        DbPassword = dbPassword;
+    }
+}
 
-        Option<string> gpt3KeyOption = new("--gptkey", "GPT-3 API KEY")
-        {
-            IsRequired = true
-        };
-        gpt3KeyOption.AddAlias("-g");
+public class UserRepository
+{
+    private readonly string _name;
+    private readonly string _folder;
+    private readonly string _password;
 
-        Option<string> pathOption = new("--path", "Path to sgpt exec")
-        {
-            IsRequired = true
-        };
-        pathOption.AddAlias("-p");
-
-        Option<List<long>> idsOption = new(
-            "--ids",
-            "A list of allowed ids")
-        {
-            AllowMultipleArgumentsPerToken = true,
-            IsRequired = false
-        };
-
-        RootCommand rootCommand = new("Telegram interface for SGPT");
-        rootCommand.AddOption(keyOption);
-        rootCommand.AddOption(pathOption);
-        rootCommand.AddOption(idsOption);
-        rootCommand.AddOption(gpt3KeyOption);
-
-        rootCommand.SetHandler(RunCommand, keyOption, pathOption, idsOption, gpt3KeyOption);
-            
-        // Parse the command line arguments
-        rootCommand.Invoke(args);
+    public UserRepository(string name, string folder, string password)
+    {
+        _name = name;
+        _folder = folder;
+        _password = password;
     }
 
-    public static void ValidateGptKey(OptionResult result)
+    public StoreUser? GetUserOrCreate(long id, string firstName, string lastName, string userName, bool isAdministrator)
     {
-        string? value = result.GetValueOrDefault<string>();
-        if (String.IsNullOrEmpty(value))
-        {
-            result.ErrorMessage = "Key is required.";
-        }
+        using var db = new LiteDatabase(
+            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
+            {
+                Connection = ConnectionType.Direct,
+            });
+        var users = db.GetCollection<StoreUser>("Users");
 
-        Regex regex = new(@"^[\w\d-]+-[A-Za-z0-9-_]{32}$");
-        bool isMatch = regex.IsMatch(value!);
-        if (isMatch == false)
-        {
-            result.ErrorMessage = "Invalid key format";
-        }
+        var user = users.FindById(id);
+        if (user != null) return user;
+        user = new StoreUser(id, firstName, lastName, userName, isAdministrator);
+        users.Insert(user);
+
+        return user;
     }
 
-    public static void ValidatePath(OptionResult result)
+    public bool UpdateUser(StoreUser updateUser)
     {
-        string? value = result.GetValueOrDefault<string>();
-        if (String.IsNullOrEmpty(value))
-        {
-            result.ErrorMessage = "Path is required.";
-        }
+        using var db = new LiteDatabase(
+            new ConnectionString($@"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
+            {
+                Connection = ConnectionType.Direct,
+            });
+        var users = db.GetCollection<StoreUser>("Users");
 
-        if (new FileInfo(value!).Exists == false)
-        {
-            result.ErrorMessage = "Path should be exists";
-        }
+        return users.Update(updateUser);
     }
 
-    private static void RunCommand(string key, string path, List<long> ids, string gptKey)
+    private static string GetSha256Hash(string inputString)
     {
-        Bot _ = new(key, path, ids, gptKey);
+        using (SHA256 sha256Hash = SHA256.Create())
+        {
+            byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(inputString));
+
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                builder.Append(bytes[i].ToString("x2"));
+            }
+
+            return builder.ToString();
+        }
     }
 }
