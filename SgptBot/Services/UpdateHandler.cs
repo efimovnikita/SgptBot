@@ -55,10 +55,59 @@ public class UpdateHandler : IUpdateHandler
             "/info"            => InfoCommand(_botClient, message, cancellationToken),
             "/model"           => ModelCommand(_botClient, message, cancellationToken),
             "/context"         => ContextCommand(_botClient, message, cancellationToken),
+            "/reset_context"   => ResetContextCommand(_botClient, message, cancellationToken),
             _                  => TalkToModelCommand(_botClient, message, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ContextCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        var storeUser = GetStoreUser(message);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        var strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/context' command you must input the context (system) prompt. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var contextPrompt = String.Join(' ', strings.Skip(1));
+        if (String.IsNullOrWhiteSpace(contextPrompt))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/context' command you must input the context (system) prompt. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var systemMessages = storeUser.Conversation.Where(msg => msg.Role == Role.System).ToArray();
+        foreach (var systemMessage in systemMessages)
+        {
+            var removeStatus = storeUser.Conversation.Remove(systemMessage);
+            if (removeStatus == false)
+            {
+                return await botClient.SendTextMessageAsync(message.Chat.Id,
+                    "Error while removing the system conversation message.",
+                    cancellationToken: cancellationToken);
+            }
+        }
+
+        var newSystemMessage = new SgptBot.Models.Message(Role.System, contextPrompt);
+        storeUser.Conversation.Insert(0, newSystemMessage);
+
+        _userRepository.UpdateUser(storeUser);
+        
+        return await botClient.SendTextMessageAsync(
+            message.Chat.Id, 
+            "Context prompt was set.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ModelCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
