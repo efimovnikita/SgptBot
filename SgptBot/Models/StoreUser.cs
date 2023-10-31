@@ -24,7 +24,7 @@ public class StoreUser
     public string ApiKey { get; set; }
     public List<Message> Conversation { get; set; } = new();
     public Model Model { get; set; } = Model.Gpt3;
-    public bool IsBlocked { get; set; } = true;
+    public bool IsBlocked { get; set; } = false;
 }
 public enum Model
 {

@@ -99,13 +99,25 @@ public class UserRepository
     public bool UpdateUser(StoreUser updateUser)
     {
         using var db = new LiteDatabase(
-            new ConnectionString($@"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
+            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
             {
                 Connection = ConnectionType.Direct,
             });
         var users = db.GetCollection<StoreUser>("Users");
 
         return users.Update(updateUser);
+    }
+    
+    public StoreUser[] GetAllUsers()
+    {
+        using var db = new LiteDatabase(
+            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
+            {
+                Connection = ConnectionType.Direct,
+            });
+        var users = db.GetCollection<StoreUser>("Users");
+
+        return users.FindAll().ToArray();
     }
 
     private static string GetSha256Hash(string inputString)

@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Extensions.Logging;
 using OpenAI_API;
 using OpenAI_API.Chat;
@@ -58,10 +59,44 @@ public class UpdateHandler : IUpdateHandler
             "/reset_context"   => ResetContextCommand(_botClient, message, cancellationToken),
             "/history"         => HistoryCommand(_botClient, message, cancellationToken),
             "/about"           => AboutCommand(_botClient, message, cancellationToken),
+            "/users"           => UsersCommand(_botClient, message, cancellationToken),
             _                  => TalkToModelCommand(_botClient, message, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> UsersCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        var storeUser = GetStoreUser(message);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser.IsAdministrator == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "This command might be executed only by the administrator.",
+                cancellationToken: cancellationToken);
+        }
+
+        var users = _userRepository.GetAllUsers();
+        var activeUsers = users.Where(user => String.IsNullOrWhiteSpace(user.ApiKey) == false &&
+                                             user.Conversation.FirstOrDefault(msg => msg.Role == Role.Ai) != null)
+            .ToArray();
+
+        var builder = new StringBuilder();
+        for (var i = 0; i < activeUsers.Length; i++)
+        {
+            var user = activeUsers[i];
+            builder.AppendLine($"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}");
+        }
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            builder.ToString(),
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> AboutCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
