@@ -57,10 +57,18 @@ public class UpdateHandler : IUpdateHandler
             "/context"         => ContextCommand(_botClient, message, cancellationToken),
             "/reset_context"   => ResetContextCommand(_botClient, message, cancellationToken),
             "/history"         => HistoryCommand(_botClient, message, cancellationToken),
+            "/about"           => AboutCommand(_botClient, message, cancellationToken),
             _                  => TalkToModelCommand(_botClient, message, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> AboutCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            "This bot allows you to talk with OpenAI GPT LLM's.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> HistoryCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
