@@ -119,6 +119,19 @@ public class UserRepository
 
         return users.FindAll().ToArray();
     }
+    
+    public StoreUser? GetUserById(long id)
+    {
+        using var db = new LiteDatabase(
+            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
+            {
+                Connection = ConnectionType.Direct,
+            });
+        var users = db.GetCollection<StoreUser>("Users");
+
+        var user = users.FindById(id);
+        return user;
+    }
 
     private static string GetSha256Hash(string inputString)
     {

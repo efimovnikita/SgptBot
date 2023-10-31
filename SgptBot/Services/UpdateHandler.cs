@@ -60,10 +60,124 @@ public class UpdateHandler : IUpdateHandler
             "/history"         => HistoryCommand(_botClient, message, cancellationToken),
             "/about"           => AboutCommand(_botClient, message, cancellationToken),
             "/users"           => UsersCommand(_botClient, message, cancellationToken),
+            "/allow"           => AllowCommand(_botClient, message, cancellationToken),
+            "/deny"            => DenyCommand(_botClient, message, cancellationToken),
             _                  => TalkToModelCommand(_botClient, message, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> DenyCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        var storeUser = GetStoreUser(message);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser.IsAdministrator == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "This command might be executed only by the administrator.",
+                cancellationToken: cancellationToken);
+        }
+        
+        var strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/deny' command you must input the user id.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var userId = strings[1];
+        if (String.IsNullOrWhiteSpace(userId))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/deny' command you must input the user id.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var parseResult = Int32.TryParse(userId, out var id);
+        if (parseResult == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/deny' command you must input the user id.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var userById = _userRepository.GetUserById(id);
+        if (userById == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                $"Error getting user by id '{id}'. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        userById.IsBlocked = true;
+        _userRepository.UpdateUser(userById);
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+                        $"User with id '{id}' was blocked.",
+                        cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> AllowCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        var storeUser = GetStoreUser(message);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser.IsAdministrator == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "This command might be executed only by the administrator.",
+                cancellationToken: cancellationToken);
+        }
+        
+        var strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/allow' command you must input the user id.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var userId = strings[1];
+        if (String.IsNullOrWhiteSpace(userId))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/allow' command you must input the user id.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var parseResult = Int32.TryParse(userId, out var id);
+        if (parseResult == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/allow' command you must input the user id.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var userById = _userRepository.GetUserById(id);
+        if (userById == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                $"Error getting user by id '{id}'. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        userById.IsBlocked = false;
+        _userRepository.UpdateUser(userById);
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+                        $"User with id '{id}' was unblocked.",
+                        cancellationToken: cancellationToken);
     }
 
     private async Task<Message> UsersCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
