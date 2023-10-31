@@ -53,10 +53,60 @@ public class UpdateHandler : IUpdateHandler
             "/key"             => SetKeyCommand(_botClient, message, cancellationToken),
             "/reset"           => ResetConversationCommand(_botClient, message, cancellationToken),
             "/info"            => InfoCommand(_botClient, message, cancellationToken),
+            "/model"           => ModelCommand(_botClient, message, cancellationToken),
+            "/context"         => ContextCommand(_botClient, message, cancellationToken),
             _                  => TalkToModelCommand(_botClient, message, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ModelCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        var storeUser = GetStoreUser(message);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        var strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5' or 'gpt4'.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var modelName = strings[1];
+        if (String.IsNullOrWhiteSpace(modelName))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5' or 'gpt4'.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (modelName.ToLower().Equals("gpt3.5") == false && modelName.ToLower().Equals("gpt4") == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5' or 'gpt4'.\nTry again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var selectedModel = modelName.ToLower() switch
+        {
+            "gpt3.5" => Models.Model.Gpt3,
+            "gpt4" => Models.Model.Gpt4,
+            _ => Models.Model.Gpt3
+        };
+
+        storeUser.Model = selectedModel;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(
+            message.Chat.Id, 
+            $"Model '{selectedModel}' was set.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> InfoCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -73,7 +123,8 @@ public class UpdateHandler : IUpdateHandler
             $"Last name: {storeUser.LastName}\n" +
             $"Username: {storeUser.UserName}\n" +
             $"OpenAI API key: {storeUser.ApiKey}\n" +
-            $"Model: {storeUser.Model}",
+            $"Model: {storeUser.Model}\n" +
+            $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}",
             cancellationToken: cancellationToken);
     }
 
