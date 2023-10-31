@@ -86,16 +86,26 @@ public class UpdateHandler : IUpdateHandler
         var activeUsers = users.Where(user => String.IsNullOrWhiteSpace(user.ApiKey) == false &&
                                              user.Conversation.FirstOrDefault(msg => msg.Role == Role.Ai) != null)
             .ToArray();
+        
+        if (activeUsers.Any() == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "Active users not found.",
+                cancellationToken: cancellationToken);
+        }
 
         var builder = new StringBuilder();
         for (var i = 0; i < activeUsers.Length; i++)
         {
             var user = activeUsers[i];
-            builder.AppendLine($"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}");
+            builder.AppendLine(
+                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}");
+            builder.AppendLine($"` /deny {user.Id} `");
+            builder.AppendLine($"` /allow {user.Id} `");
         }
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, 
-            builder.ToString(),
+            builder.ToString(), parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
     }
 
