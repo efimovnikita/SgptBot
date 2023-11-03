@@ -214,12 +214,10 @@ public class UpdateHandler : IUpdateHandler
             var user = activeUsers[i];
             builder.AppendLine(
                 $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}");
-            builder.AppendLine($"` /deny {user.Id} `");
-            builder.AppendLine($"` /allow {user.Id} `");
         }
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, 
-            builder.ToString(), parseMode: ParseMode.Markdown,
+            builder.ToString(),
             cancellationToken: cancellationToken);
     }
 
