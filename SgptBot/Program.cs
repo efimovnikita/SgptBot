@@ -1,14 +1,11 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using LiteDB;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SgptBot.Models;
 using SgptBot.Services;
 using Telegram.Bot;
 
 IHost host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices((context, services) =>
+    .ConfigureServices((_, services) =>
     {
         var token = Environment.GetEnvironmentVariable("TOKEN");
         if(string.IsNullOrEmpty(token))
@@ -51,101 +48,3 @@ IHost host = Host.CreateDefaultBuilder(args)
     .Build();
 
 await host.RunAsync();
-
-public class ApplicationSettings 
-{
-    public long AdminId { get; }
-    public string DbConnectionString { get; }
-    public string DbPassword { get; }
-
-    public ApplicationSettings(long adminId, string dbConnectionString, string dbPassword)
-    {
-        AdminId = adminId;
-        DbConnectionString = dbConnectionString;
-        DbPassword = dbPassword;
-    }
-}
-
-public class UserRepository
-{
-    private readonly string _name;
-    private readonly string _folder;
-    private readonly string _password;
-
-    public UserRepository(string name, string folder, string password)
-    {
-        _name = name;
-        _folder = folder;
-        _password = password;
-    }
-
-    public StoreUser? GetUserOrCreate(long id, string firstName, string lastName, string userName, bool isAdministrator)
-    {
-        using var db = new LiteDatabase(
-            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
-            {
-                Connection = ConnectionType.Direct,
-            });
-        var users = db.GetCollection<StoreUser>("Users");
-
-        var user = users.FindById(id);
-        if (user != null) return user;
-        user = new StoreUser(id, firstName, lastName, userName, isAdministrator);
-        users.Insert(user);
-
-        return user;
-    }
-
-    public bool UpdateUser(StoreUser updateUser)
-    {
-        using var db = new LiteDatabase(
-            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
-            {
-                Connection = ConnectionType.Direct,
-            });
-        var users = db.GetCollection<StoreUser>("Users");
-
-        return users.Update(updateUser);
-    }
-    
-    public StoreUser[] GetAllUsers()
-    {
-        using var db = new LiteDatabase(
-            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
-            {
-                Connection = ConnectionType.Direct,
-            });
-        var users = db.GetCollection<StoreUser>("Users");
-
-        return users.FindAll().ToArray();
-    }
-    
-    public StoreUser? GetUserById(long id)
-    {
-        using var db = new LiteDatabase(
-            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
-            {
-                Connection = ConnectionType.Direct,
-            });
-        var users = db.GetCollection<StoreUser>("Users");
-
-        var user = users.FindById(id);
-        return user;
-    }
-
-    private static string GetSha256Hash(string inputString)
-    {
-        using (SHA256 sha256Hash = SHA256.Create())
-        {
-            byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(inputString));
-
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                builder.Append(bytes[i].ToString("x2"));
-            }
-
-            return builder.ToString();
-        }
-    }
-}
