@@ -1,9 +1,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:6.0-alpine AS build-env
 WORKDIR /app
 COPY *.csproj ./
-RUN dotnet restore /p:PublishReadyToRun=true
+RUN dotnet restore
 COPY . ./
-RUN dotnet publish /p:PublishReadyToRun=true /p:PublishSingleFile=true --self-contained true -c Release -o out
+RUN dotnet publish -c Release -o out
 
 FROM mcr.microsoft.com/dotnet/runtime:6.0-alpine as final
 
