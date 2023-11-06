@@ -490,7 +490,8 @@ public class UpdateHandler : IUpdateHandler
         _userRepository.UpdateUser(storeUser);
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, response,
-            parseMode: ParseMode.Markdown, cancellationToken: cancellationToken);
+            parseMode: ParseMode.Markdown, replyToMessageId:  message.MessageId, 
+            cancellationToken: cancellationToken);
     }
 
     private StoreUser? GetStoreUser(Message message)
