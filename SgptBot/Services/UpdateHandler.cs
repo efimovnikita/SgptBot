@@ -30,16 +30,48 @@ public class UpdateHandler : IUpdateHandler
         _userRepository = userRepository;
     }
 
-    public async Task HandleUpdateAsync(ITelegramBotClient _, Update update, CancellationToken cancellationToken)
+    public async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken cancellationToken)
     {
         var handler = update switch
         {
             { Message: { } message }                       => BotOnMessageReceived(message, cancellationToken),
             { EditedMessage: { } message }                 => BotOnMessageReceived(message, cancellationToken),
+            { CallbackQuery: { } callbackQuery }           => BotOnCallbackQueryReceived(callbackQuery, client, cancellationToken),
             _                                              => UnknownUpdateHandlerAsync(update, cancellationToken)
         };
 
         await handler;
+    }
+    
+    private async Task<Message> BotOnCallbackQueryReceived(CallbackQuery callbackQuery, ITelegramBotClient botClient,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Received inline keyboard callback from: {CallbackQueryId}", callbackQuery.Id);
+
+        Message message = callbackQuery.Message!;
+        
+        var storeUser = GetStoreUser(callbackQuery.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        string? data = callbackQuery.Data;
+        if (String.IsNullOrWhiteSpace(data))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Callback query data is empty.",
+                cancellationToken: cancellationToken);
+        }
+        
+        var strings = data.Split(' ');
+        
+        await _botClient.AnswerCallbackQueryAsync(
+            callbackQueryId: callbackQuery.Id,
+            text: $"Received {callbackQuery.Data}",
+            cancellationToken: cancellationToken);
+        
+        return await SetSelectedModel(botClient, message.Chat.Id, strings, storeUser, cancellationToken);
     }
 
     private async Task BotOnMessageReceived(Message message, CancellationToken cancellationToken)
@@ -70,7 +102,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> DenyCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -126,7 +158,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> AllowCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -182,7 +214,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> UsersCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -237,7 +269,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> ResetContextCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -254,7 +286,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> ContextCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -301,7 +333,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> ModelCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -311,22 +343,45 @@ public class UpdateHandler : IUpdateHandler
         var strings = message.Text!.Split(' ');
         if (strings.Length < 2)
         {
+            // Defining buttons
+            InlineKeyboardButton gpt3Button = new("GPT 3.5") { CallbackData = "/model gpt3.5"};
+            InlineKeyboardButton gpt4Button = new("GPT 4") { CallbackData = "/model gpt4"};
+     
+            // Rows, every row is InlineKeyboardButton[], You can put multiple buttons!
+            InlineKeyboardButton[] row1 = { gpt3Button, gpt4Button };
+            
+            // Buttons by rows
+            InlineKeyboardButton[][] buttons = { row1 };
+    
+            // Keyboard
+            InlineKeyboardMarkup inlineKeyboard = new(buttons);
+            
             return await botClient.SendTextMessageAsync(message.Chat.Id,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5' or 'gpt4'.\nTry again.",
+                @"Select the model that you want to use.
+
+1) GPT-3.5 models can understand and generate natural language or code. Our most capable and cost effective model in the GPT-3.5 family.
+2) GPT-4 is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any of our previous models, thanks to its broader general knowledge and advanced reasoning capabilities.",
+                replyMarkup: inlineKeyboard,
                 cancellationToken: cancellationToken);
         }
 
+        return await SetSelectedModel(botClient, message.Chat.Id, strings, storeUser, cancellationToken);
+    }
+
+    private async Task<Message> SetSelectedModel(ITelegramBotClient botClient, long chatId,
+        string[] strings, StoreUser storeUser, CancellationToken cancellationToken)
+    {
         var modelName = strings[1];
         if (String.IsNullOrWhiteSpace(modelName))
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id,
+            return await botClient.SendTextMessageAsync(chatId,
                 "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5' or 'gpt4'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
         
         if (modelName.ToLower().Equals("gpt3.5") == false && modelName.ToLower().Equals("gpt4") == false)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id,
+            return await botClient.SendTextMessageAsync(chatId,
                 "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5' or 'gpt4'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
@@ -342,14 +397,14 @@ public class UpdateHandler : IUpdateHandler
         _userRepository.UpdateUser(storeUser);
 
         return await botClient.SendTextMessageAsync(
-            message.Chat.Id, 
+            chatId, 
             $"Model '{selectedModel}' was set.",
             cancellationToken: cancellationToken);
     }
 
     private async Task<Message> InfoCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -368,7 +423,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> ResetConversationCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -394,7 +449,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> SetKeyCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -424,7 +479,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> TalkToModelCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -494,9 +549,9 @@ public class UpdateHandler : IUpdateHandler
             cancellationToken: cancellationToken);
     }
 
-    private StoreUser? GetStoreUser(Message message)
+    private StoreUser? GetStoreUser(User? messageFrom)
     {
-        var user = message.From;
+        var user = messageFrom;
         if (user == null)
         {
             return null;
@@ -510,7 +565,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<Message> UsageCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store",
