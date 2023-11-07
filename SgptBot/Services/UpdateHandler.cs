@@ -581,14 +581,14 @@ public class UpdateHandler : IUpdateHandler
         var strings = message.Text!.Split(' ');
         if (strings.Length < 2)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "After '/key' command you must input your openAI API key. Try again.",
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "After '/key' command you must input your openAI API key. You can get your key here - https://platform.openai.com/account/api-keys. Try again.",
                 cancellationToken: cancellationToken);
         }
 
         var apiKey = strings[1];
         if (String.IsNullOrWhiteSpace(apiKey))
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "After '/key' command you must input your openAI API key. Try again.",
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "After '/key' command you must input your openAI API key. You can get your key here - https://platform.openai.com/account/api-keys. Try again.",
                 cancellationToken: cancellationToken);
         }
 
