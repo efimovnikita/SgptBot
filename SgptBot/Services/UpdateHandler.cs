@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using OpenAI_API;
@@ -598,6 +599,7 @@ public class UpdateHandler : IUpdateHandler
             cancellationToken: cancellationToken);
     }
 
+    // ReSharper disable once CognitiveComplexity
     private async Task<Message> TalkToModelCommand(ITelegramBotClient botClient, Message message, string messageText,
         CancellationToken cancellationToken)
     {
@@ -661,14 +663,79 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
         
+        _logger.LogInformation("Received response message from model.");
+        
         storeUser.Conversation.Add(new Models.Message(Role.User, messageText));
         storeUser.Conversation.Add(new Models.Message(Role.Ai, response));
 
         _userRepository.UpdateUser(storeUser);
+
+        if (storeUser.VoiceMode)
+        {
+            _logger.LogInformation("Voice mode is active.");
+            _logger.LogInformation("Response length is: {length}", response.Length);
+
+            string ttsAudioFilePath = await GetTtsAudio(response.Replace(Environment.NewLine, ""), storeUser.ApiKey);
+            _logger.LogInformation("Path to tts audio message: {path}", ttsAudioFilePath);
+            
+            if (String.IsNullOrEmpty(ttsAudioFilePath) == false)
+            {
+                return await botClient.SendVoiceAsync(message.Chat.Id,
+                    InputFile.FromStream(System.IO.File.OpenRead(ttsAudioFilePath)),
+                    replyToMessageId: message.MessageId,
+                    cancellationToken: cancellationToken);
+            }
+        }
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, response,
             parseMode: ParseMode.Markdown, replyToMessageId:  message.MessageId, 
             cancellationToken: cancellationToken);
+    }
+
+    private async Task<string> GetTtsAudio(string text, string token)
+    {
+        try
+        {
+            var requestData = new { Text = text, Token = token };
+
+            JsonSerializerOptions jsonOptions = new()
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+            string jsonData = System.Text.Json.JsonSerializer.Serialize(requestData, jsonOptions);
+            
+            HttpClientHandler httpClientHandler = new()
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+
+            using HttpClient client = new(httpClientHandler);
+
+            client.Timeout = TimeSpan.FromMinutes(4);
+
+            HttpContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            HttpResponseMessage response = await client.PostAsync(_appSettings.TtsApiUrl, content);
+            response.EnsureSuccessStatusCode();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return "";
+            }
+
+            string fileName = Path.GetRandomFileName() + ".mp3"; 
+            string audioFilePath = Path.Combine(Path.GetTempPath(), fileName);
+
+            await using FileStream fileStream = new(audioFilePath, FileMode.Create, FileAccess.Write);
+            await response.Content.CopyToAsync(fileStream);
+
+            return System.IO.File.Exists(audioFilePath) ? audioFilePath : "";
+        }
+        catch (Exception)
+        {
+            return "";
+        }
     }
 
     private StoreUser? GetStoreUser(User? messageFrom)

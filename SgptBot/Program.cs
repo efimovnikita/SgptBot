@@ -31,6 +31,12 @@ IHost host = Host.CreateDefaultBuilder(args)
             throw new ArgumentNullException("PASSWORD", "Environment variable PASSWORD is not set.");
         }
 
+        string? ttsApi = Environment.GetEnvironmentVariable("TTS");
+        if (ttsApi == null)
+        {
+            throw new ArgumentNullException("TTS", "Environment variable TTS is not set.");
+        }
+
         services.AddHttpClient("telegram_bot_client")
             .AddTypedClient<ITelegramBotClient>((httpClient, sp) =>
             {
@@ -38,7 +44,7 @@ IHost host = Host.CreateDefaultBuilder(args)
                 return new TelegramBotClient(options, httpClient);
             });
         
-        services.AddSingleton(new ApplicationSettings(Int32.Parse(adminId), dbFolder, dbPassword));
+        services.AddSingleton(new ApplicationSettings(Int32.Parse(adminId), dbFolder, dbPassword, ttsApi));
         services.AddSingleton(new UserRepository("store", dbFolder, dbPassword));
 
         services.AddScoped<UpdateHandler>();
