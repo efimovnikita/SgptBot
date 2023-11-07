@@ -1,5 +1,7 @@
+using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using OpenAI_API;
 using OpenAI_API.Chat;
 using SgptBot.Models;
@@ -9,6 +11,7 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using File = Telegram.Bot.Types.File;
 using Message = Telegram.Bot.Types.Message;
 using Model = OpenAI_API.Models.Model;
 
@@ -34,8 +37,8 @@ public class UpdateHandler : IUpdateHandler
     {
         var handler = update switch
         {
-            { Message: { } message }                       => BotOnMessageReceived(message, cancellationToken),
-            { EditedMessage: { } message }                 => BotOnMessageReceived(message, cancellationToken),
+            { Message: { } message }                       => BotOnMessageReceived(message, client, cancellationToken),
+            { EditedMessage: { } message }                 => BotOnMessageReceived(message, client, cancellationToken),
             { CallbackQuery: { } callbackQuery }           => BotOnCallbackQueryReceived(callbackQuery, client, cancellationToken),
             _                                              => UnknownUpdateHandlerAsync(update, cancellationToken)
         };
@@ -74,13 +77,17 @@ public class UpdateHandler : IUpdateHandler
         return await SetSelectedModel(botClient, message.Chat.Id, strings, storeUser, cancellationToken);
     }
 
-    private async Task BotOnMessageReceived(Message message, CancellationToken cancellationToken)
+    private async Task BotOnMessageReceived(Message message, ITelegramBotClient client,
+        CancellationToken cancellationToken)
     {
         _logger.LogInformation("Receive message type: {MessageType}", message.Type);
-        if (message.Text is not { } messageText)
+        string messageText = message.Text ?? await GetTranscriptionTextFromVoiceMessage(message, client, cancellationToken);
+        if (String.IsNullOrEmpty(messageText))
+        {
             return;
+        }
 
-        var action = messageText.Split(' ')[0] switch
+        Task<Message> action = messageText.Split(' ')[0] switch
         {
             "/usage"           => UsageCommand(_botClient, message, cancellationToken),
             "/key"             => SetKeyCommand(_botClient, message, cancellationToken),
@@ -94,12 +101,95 @@ public class UpdateHandler : IUpdateHandler
             "/users"           => UsersCommand(_botClient, message, cancellationToken),
             "/allow"           => AllowCommand(_botClient, message, cancellationToken),
             "/deny"            => DenyCommand(_botClient, message, cancellationToken),
-            _                  => TalkToModelCommand(_botClient, message, cancellationToken)
+            _                  => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
     }
 
+    private async Task<string> GetTranscriptionTextFromVoiceMessage(Message message, ITelegramBotClient client, CancellationToken cancellationToken)
+    {
+        Voice? voice = message.Voice;
+        if (voice == null)
+        {
+            return "";
+        }
+
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return "";
+        }
+
+        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+        {
+            return "";
+        }
+
+        if (storeUser is { IsBlocked: true, IsAdministrator: false })
+        {
+            return "";
+        }
+
+        File file = await client.GetFileAsync(voice.FileId, cancellationToken: cancellationToken);
+
+        string path = Path.GetTempPath();
+        string fileName = Path.Combine(path, file.FileId + ".ogg");
+
+        if (file.FilePath != null)
+        {
+            await using FileStream stream = System.IO.File.OpenWrite(fileName);
+            await client.DownloadFileAsync(file.FilePath, stream, cancellationToken);
+        }
+        else
+        {
+            return "";
+        }
+
+        if (System.IO.File.Exists(fileName) == false)
+        {
+            return "";
+        }
+
+        string responseText = await CreateTranscriptionAsync(storeUser.ApiKey, fileName);
+        if (String.IsNullOrEmpty(responseText))
+        {
+            return "";
+        }
+        
+        return responseText;
+    }
+
+    private async Task<string> CreateTranscriptionAsync(string token, string filePath)
+    {
+        try
+        {
+            using HttpClient httpClient = new();
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        
+            MultipartFormDataContent form = new();
+            ByteArrayContent fileContent = new(await System.IO.File.ReadAllBytesAsync(filePath));
+            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data");
+            form.Add(fileContent, "file", Path.GetFileName(filePath));
+            form.Add(new StringContent("whisper-1"), "model");
+
+            HttpResponseMessage response = await httpClient.PostAsync("https://api.openai.com/v1/audio/transcriptions", form);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return String.Empty;
+            }
+
+            string result = await response.Content.ReadAsStringAsync();
+            TranscriptionResponse? transcriptionResponse = JsonConvert.DeserializeObject<TranscriptionResponse>(result);
+            return transcriptionResponse?.Text ?? String.Empty;
+        }
+        catch
+        {
+            return String.Empty;
+        }
+    }
+    
     private async Task<Message> DenyCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         var storeUser = GetStoreUser(message.From);
@@ -477,7 +567,8 @@ public class UpdateHandler : IUpdateHandler
             cancellationToken: cancellationToken);
     }
 
-    private async Task<Message> TalkToModelCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    private async Task<Message> TalkToModelCommand(ITelegramBotClient botClient, Message message, string messageText,
+        CancellationToken cancellationToken)
     {
         var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
@@ -513,7 +604,7 @@ public class UpdateHandler : IUpdateHandler
             chatMessages.Add(new ChatMessage(msg.Role == Role.Ai ? ChatMessageRole.Assistant : ChatMessageRole.User, msg.Msg));
         }
         
-        chatMessages.Add(new ChatMessage(ChatMessageRole.User, message.Text));
+        chatMessages.Add(new ChatMessage(ChatMessageRole.User, messageText));
 
         var request = new ChatRequest
         {
@@ -539,7 +630,7 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
         
-        storeUser.Conversation.Add(new Models.Message(Role.User, message.Text!));
+        storeUser.Conversation.Add(new Models.Message(Role.User, messageText));
         storeUser.Conversation.Add(new Models.Message(Role.Ai, response));
 
         _userRepository.UpdateUser(storeUser);
