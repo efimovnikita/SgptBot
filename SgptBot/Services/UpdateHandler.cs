@@ -101,10 +101,40 @@ public class UpdateHandler : IUpdateHandler
             "/users"           => UsersCommand(_botClient, message, cancellationToken),
             "/allow"           => AllowCommand(_botClient, message, cancellationToken),
             "/deny"            => DenyCommand(_botClient, message, cancellationToken),
+            "/toggle_voice"    => ToggleVoiceCommand(_botClient, message, cancellationToken),
             _                  => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ToggleVoiceCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Your api key is not set. Use '/key' command and set key.",
+                cancellationToken: cancellationToken);
+        }
+
+        if (storeUser is { IsBlocked: true, IsAdministrator: false })
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "You are blocked. Wait for some time and try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.VoiceMode = !storeUser.VoiceMode;
+        _userRepository.UpdateUser(storeUser);
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            $"Voice mode is: {storeUser.VoiceMode}",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<string> GetTranscriptionTextFromVoiceMessage(Message message, ITelegramBotClient client, CancellationToken cancellationToken)
@@ -507,6 +537,7 @@ public class UpdateHandler : IUpdateHandler
             $"Username: {storeUser.UserName}\n" +
             $"OpenAI API key: {storeUser.ApiKey}\n" +
             $"Model: {storeUser.Model}\n" +
+            $"Voice mode: {storeUser.VoiceMode}\n" +
             $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}",
             cancellationToken: cancellationToken);
     }
@@ -670,6 +701,7 @@ public class UpdateHandler : IUpdateHandler
                        "/reset_context - reset the context message\n" +
                        "/history - view the conversation history\n" +
                        "/reset - reset the current conversation\n" +
+                       "/toggle_voice - enable/disable voice mode\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
                        "/about - about this bot";

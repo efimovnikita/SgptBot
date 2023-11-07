@@ -25,4 +25,5 @@ public class StoreUser
     public List<Message> Conversation { get; set; } = new();
     public Model Model { get; set; } = Model.Gpt3;
     public bool IsBlocked { get; set; } = false;
+    public bool VoiceMode { get; set; } = false;
 }
