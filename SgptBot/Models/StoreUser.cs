@@ -26,4 +26,6 @@ public class StoreUser
     public Model Model { get; set; } = Model.Gpt3;
     public bool IsBlocked { get; set; } = false;
     public bool VoiceMode { get; set; } = false;
+    public ImgQuality ImgQuality { get; set; } = ImgQuality.Standard;
+    public ImgStyle ImgStyle { get; set; } = ImgStyle.Natural;
 }

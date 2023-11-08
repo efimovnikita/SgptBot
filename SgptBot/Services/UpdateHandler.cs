@@ -91,24 +91,88 @@ public class UpdateHandler : IUpdateHandler
 
         Task<Message> action = messageText.Split(' ')[0] switch
         {
-            "/usage"           => UsageCommand(_botClient, message, cancellationToken),
-            "/key"             => SetKeyCommand(_botClient, message, cancellationToken),
-            "/reset"           => ResetConversationCommand(_botClient, message, cancellationToken),
-            "/info"            => InfoCommand(_botClient, message, cancellationToken),
-            "/model"           => ModelCommand(_botClient, message, cancellationToken),
-            "/context"         => ContextCommand(_botClient, message, cancellationToken),
-            "/reset_context"   => ResetContextCommand(_botClient, message, cancellationToken),
-            "/history"         => HistoryCommand(_botClient, message, cancellationToken),
-            "/about"           => AboutCommand(_botClient, message, cancellationToken),
-            "/users"           => UsersCommand(_botClient, message, cancellationToken),
-            "/allow"           => AllowCommand(_botClient, message, cancellationToken),
-            "/deny"            => DenyCommand(_botClient, message, cancellationToken),
-            "/toggle_voice"    => ToggleVoiceCommand(_botClient, message, cancellationToken),
-            "/image"           => ImageCommand(_botClient, message, cancellationToken),
-            _                  => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
+            "/usage"                 => UsageCommand(_botClient, message, cancellationToken),
+            "/key"                   => SetKeyCommand(_botClient, message, cancellationToken),
+            "/reset"                 => ResetConversationCommand(_botClient, message, cancellationToken),
+            "/info"                  => InfoCommand(_botClient, message, cancellationToken),
+            "/model"                 => ModelCommand(_botClient, message, cancellationToken),
+            "/context"               => ContextCommand(_botClient, message, cancellationToken),
+            "/reset_context"         => ResetContextCommand(_botClient, message, cancellationToken),
+            "/history"               => HistoryCommand(_botClient, message, cancellationToken),
+            "/about"                 => AboutCommand(_botClient, message, cancellationToken),
+            "/users"                 => UsersCommand(_botClient, message, cancellationToken),
+            "/allow"                 => AllowCommand(_botClient, message, cancellationToken),
+            "/deny"                  => DenyCommand(_botClient, message, cancellationToken),
+            "/toggle_voice"          => ToggleVoiceCommand(_botClient, message, cancellationToken),
+            "/toggle_img_quality"    => ToggleImgQualityCommand(_botClient, message, cancellationToken),
+            "/toggle_img_style"      => ToggleImgStyleCommand(_botClient, message, cancellationToken),
+            "/image"                 => ImageCommand(_botClient, message, cancellationToken),
+            _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ToggleImgStyleCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Your api key is not set. Use '/key' command and set key.",
+                cancellationToken: cancellationToken);
+        }
+
+        if (storeUser is { IsBlocked: true, IsAdministrator: false })
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "You are blocked. Wait for some time and try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.ImgStyle = storeUser.ImgStyle == ImgStyle.Natural ? ImgStyle.Vivid : ImgStyle.Natural;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            @$"Vivid causes the model to lean towards generating hyper-real and dramatic images. Natural causes the model to produce more natural, less hyper-real looking images.
+
+Current image style is: {storeUser.ImgStyle.ToString().ToLower()}",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> ToggleImgQualityCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Your api key is not set. Use '/key' command and set key.",
+                cancellationToken: cancellationToken);
+        }
+
+        if (storeUser is { IsBlocked: true, IsAdministrator: false })
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "You are blocked. Wait for some time and try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.ImgQuality = storeUser.ImgQuality == ImgQuality.Standard ? ImgQuality.Hd : ImgQuality.Standard;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            @$"HD creates images with finer details and greater consistency across the image.
+
+Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ImageCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -136,7 +200,8 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
         
-        (string? url, string? revisedPrompt) = await GenerateImage(prompt, storeUser.ApiKey);
+        (string? url, string? revisedPrompt) = await GenerateImage(prompt, storeUser.ApiKey,
+            storeUser.ImgStyle.ToString().ToLower(), storeUser.ImgQuality.ToString().ToLower());
         if (String.IsNullOrEmpty(url) || String.IsNullOrEmpty(revisedPrompt))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -584,7 +649,9 @@ public class UpdateHandler : IUpdateHandler
             $"Username: {storeUser.UserName}\n" +
             $"OpenAI API key: {storeUser.ApiKey}\n" +
             $"Model: {storeUser.Model}\n" +
-            $"Voice mode: {(storeUser.VoiceMode ? "On" : "Off")}\n" +
+            $"Voice mode: {(storeUser.VoiceMode ? "on" : "off")}\n" +
+            $"Image quality: {storeUser.ImgQuality.ToString().ToLower()}\n" +
+            $"Image style: {storeUser.ImgStyle.ToString().ToLower()}\n" +
             $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}",
             cancellationToken: cancellationToken);
     }
@@ -738,7 +805,8 @@ public class UpdateHandler : IUpdateHandler
             cancellationToken: cancellationToken);
     }
     
-    private async Task<(string Url, string RevisedPrompt)> GenerateImage(string prompt, string token)
+    private async Task<(string Url, string RevisedPrompt)> GenerateImage(string prompt, string token, string style,
+        string quality)
     {
         try
         {
@@ -748,7 +816,8 @@ public class UpdateHandler : IUpdateHandler
                 Prompt = prompt, 
                 N = 1, 
                 Size = "1024x1024",
-                Style = "natural"
+                Style = style,
+                Quality = quality
             };
 
             JsonSerializerOptions jsonOptions = new()
@@ -866,6 +935,8 @@ public class UpdateHandler : IUpdateHandler
                        "/history - view the conversation history\n" +
                        "/reset - reset the current conversation\n" +
                        "/toggle_voice - enable/disable voice mode\n" +
+                       "/toggle_img_quality - switch between standard or HD image quality\n" +
+                       "/toggle_img_style - switch between vivid or natural image style\n" +
                        "/image - generate an image with help of DALL·E 3\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
