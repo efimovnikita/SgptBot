@@ -180,7 +180,7 @@ public class UpdateHandler : IUpdateHandler
         _userRepository.UpdateUser(storeUser);
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, 
-            $"Voice mode is: {storeUser.VoiceMode}",
+            $"Voice mode is: {(storeUser.VoiceMode ? "On" : "Off")}",
             cancellationToken: cancellationToken);
     }
 
@@ -584,7 +584,7 @@ public class UpdateHandler : IUpdateHandler
             $"Username: {storeUser.UserName}\n" +
             $"OpenAI API key: {storeUser.ApiKey}\n" +
             $"Model: {storeUser.Model}\n" +
-            $"Voice mode: {storeUser.VoiceMode}\n" +
+            $"Voice mode: {(storeUser.VoiceMode ? "On" : "Off")}\n" +
             $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}",
             cancellationToken: cancellationToken);
     }
