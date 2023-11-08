@@ -13,6 +13,7 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using File = Telegram.Bot.Types.File;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 using Message = Telegram.Bot.Types.Message;
 using Model = OpenAI_API.Models.Model;
 
@@ -103,10 +104,55 @@ public class UpdateHandler : IUpdateHandler
             "/allow"           => AllowCommand(_botClient, message, cancellationToken),
             "/deny"            => DenyCommand(_botClient, message, cancellationToken),
             "/toggle_voice"    => ToggleVoiceCommand(_botClient, message, cancellationToken),
+            "/image"           => ImageCommand(_botClient, message, cancellationToken),
             _                  => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ImageCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/image' command you must input the prompt. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string prompt = String.Join(' ', strings.Skip(1));
+        if (String.IsNullOrWhiteSpace(prompt))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/image' command you must input the prompt. Try again.",
+                cancellationToken: cancellationToken);
+        }
+        
+        (string? url, string? revisedPrompt) = await GenerateImage(prompt, storeUser.ApiKey);
+        if (String.IsNullOrEmpty(url) || String.IsNullOrEmpty(revisedPrompt))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "Error while generating the image. Try again.",
+                cancellationToken: cancellationToken);
+        }
+        
+        await botClient.SendTextMessageAsync(message.Chat.Id,
+            revisedPrompt,
+            replyToMessageId: message.MessageId,
+            cancellationToken: cancellationToken);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            url,
+            replyToMessageId: message.MessageId,
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ToggleVoiceCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -691,6 +737,57 @@ public class UpdateHandler : IUpdateHandler
             parseMode: ParseMode.Markdown, replyToMessageId:  message.MessageId, 
             cancellationToken: cancellationToken);
     }
+    
+    private async Task<(string Url, string RevisedPrompt)> GenerateImage(string prompt, string token)
+    {
+        try
+        {
+            var requestData = new 
+            { 
+                Model = "dall-e-3", 
+                Prompt = prompt, 
+                N = 1, 
+                Size = "1024x1024",
+                Style = "natural"
+            };
+
+            JsonSerializerOptions jsonOptions = new()
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+
+            string jsonData = JsonSerializer.Serialize(requestData, jsonOptions);
+
+            using HttpClient client = new();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            HttpContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            HttpResponseMessage response = await client.PostAsync("https://api.openai.com/v1/images/generations", content);
+            response.EnsureSuccessStatusCode();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return ("", "");
+            }
+
+            string stringResponse = await response.Content.ReadAsStringAsync();
+            RootImageObject? responseObject = JsonSerializer.Deserialize<RootImageObject>(stringResponse);
+
+            if (responseObject == null)
+            {
+                return ("", "");
+            }
+            
+            return (responseObject.Data[0].Url, responseObject.Data[0].RevisedPrompt);
+        }
+        catch (Exception)
+        {
+            return ("", "");
+        }
+    }
 
     private async Task<string> GetTtsAudio(string text, string token)
     {
@@ -702,7 +799,7 @@ public class UpdateHandler : IUpdateHandler
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
-            string jsonData = System.Text.Json.JsonSerializer.Serialize(requestData, jsonOptions);
+            string jsonData = JsonSerializer.Serialize(requestData, jsonOptions);
             
             HttpClientHandler httpClientHandler = new()
             {
@@ -769,6 +866,7 @@ public class UpdateHandler : IUpdateHandler
                        "/history - view the conversation history\n" +
                        "/reset - reset the current conversation\n" +
                        "/toggle_voice - enable/disable voice mode\n" +
+                       "/image - generate an image with help of DALL·E 3\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
                        "/about - about this bot";
