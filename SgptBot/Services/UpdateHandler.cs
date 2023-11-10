@@ -1,7 +1,5 @@
-using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using OpenAiNg;
 using OpenAiNg.Audio;
 using OpenAiNg.Chat;
@@ -288,41 +286,44 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         string responseText = await CreateTranscriptionAsync(storeUser.ApiKey, fileName);
-        if (String.IsNullOrEmpty(responseText))
-        {
-            return "";
-        }
         
-        return responseText;
+        return !String.IsNullOrEmpty(responseText) ? responseText : "";
     }
 
-    private async Task<string> CreateTranscriptionAsync(string token, string filePath)
+    private static async Task<string> CreateTranscriptionAsync(string token, string filePath)
     {
+        FileStream fileStream = new(filePath, FileMode.OpenOrCreate);
+
         try
         {
-            using HttpClient httpClient = new();
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        
-            MultipartFormDataContent form = new();
-            ByteArrayContent fileContent = new(await System.IO.File.ReadAllBytesAsync(filePath));
-            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data");
-            form.Add(fileContent, "file", Path.GetFileName(filePath));
-            form.Add(new StringContent("whisper-1"), "model");
-
-            HttpResponseMessage response = await httpClient.PostAsync("https://api.openai.com/v1/audio/transcriptions", form);
-
-            if (!response.IsSuccessStatusCode)
+            OpenAiApi api = new(token);
+            
+            AudioFile audioFile = new()
             {
-                return String.Empty;
-            }
+                File = fileStream,
+                ContentType = "ogg",
+                Name = Path.GetFileName(filePath)
+            };
 
-            string result = await response.Content.ReadAsStringAsync();
-            TranscriptionResponse? transcriptionResponse = JsonConvert.DeserializeObject<TranscriptionResponse>(result);
-            return transcriptionResponse?.Text ?? String.Empty;
+            TranscriptionRequest transcriptionRequest = new()
+            {
+                File = audioFile,
+                Model = OpenAiNg.Models.Model.Whisper_1,
+                ResponseFormat = "text",
+            };
+
+            TranscriptionVerboseJsonResult? result =
+                await api.Audio.CreateTranscriptionAsync(transcriptionRequest);
+            
+            return result != null ? result.Text : "";
         }
         catch
         {
             return String.Empty;
+        }
+        finally
+        {
+            fileStream.Close();
         }
     }
     
