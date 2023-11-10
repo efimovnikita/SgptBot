@@ -1,11 +1,11 @@
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using OpenAiNg;
 using OpenAiNg.Audio;
 using OpenAiNg.Chat;
+using OpenAiNg.Images;
 using SgptBot.Models;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
@@ -14,7 +14,6 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using File = Telegram.Bot.Types.File;
-using JsonSerializer = System.Text.Json.JsonSerializer;
 using Message = Telegram.Bot.Types.Message;
 
 namespace SgptBot.Services;
@@ -199,20 +198,15 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 "After the '/image' command you must input the prompt. Try again.",
                 cancellationToken: cancellationToken);
         }
-        
-        (string? url, string? revisedPrompt) = await GenerateImage(prompt, storeUser.ApiKey,
-            storeUser.ImgStyle.ToString().ToLower(), storeUser.ImgQuality.ToString().ToLower());
-        if (String.IsNullOrEmpty(url) || String.IsNullOrEmpty(revisedPrompt))
+
+        string? url = await GenerateImage(prompt, storeUser.ApiKey,
+            storeUser.ImgStyle, storeUser.ImgQuality);
+        if (String.IsNullOrEmpty(url))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
-                "Error while generating the image. Try again.",
+                "Error while generating an image. Try again.",
                 cancellationToken: cancellationToken);
         }
-        
-        await botClient.SendTextMessageAsync(message.Chat.Id,
-            revisedPrompt,
-            replyToMessageId: message.MessageId,
-            cancellationToken: cancellationToken);
 
         return await botClient.SendTextMessageAsync(message.Chat.Id,
             url,
@@ -805,56 +799,36 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             cancellationToken: cancellationToken);
     }
     
-    private async Task<(string Url, string RevisedPrompt)> GenerateImage(string prompt, string token, string style,
-        string quality)
+    private static async Task<string?> GenerateImage(string prompt, string token, ImgStyle style,
+        ImgQuality quality)
     {
         try
         {
-            var requestData = new 
-            { 
-                Model = "dall-e-3", 
-                Prompt = prompt, 
-                N = 1, 
-                Size = "1024x1024",
-                Style = style,
-                Quality = quality
+            OpenAiApi api = new(token);
+
+            ImageGenerationRequest request = new(prompt)
+            {
+                Model = OpenAiNg.Models.Model.Dalle3,
+                Quality = quality == ImgQuality.Standard ? ImageQuality.Standard : ImageQuality.Hd,
+                Style = style == ImgStyle.Natural ? ImageStyles.Natural : ImageStyles.Vivid,
+                NumOfImages = 1,
+                Size = ImageSize._1024,
             };
 
-            JsonSerializerOptions jsonOptions = new()
+            ImageResult? imageResult = await api.ImageGenerations.CreateImageAsync(request);
+
+            Data? imageData = imageResult?.Data?.FirstOrDefault();
+            if (imageData == null)
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
-
-            string jsonData = JsonSerializer.Serialize(requestData, jsonOptions);
-
-            using HttpClient client = new();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-            HttpContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-            HttpResponseMessage response = await client.PostAsync("https://api.openai.com/v1/images/generations", content);
-            response.EnsureSuccessStatusCode();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return ("", "");
+                return "";
             }
 
-            string stringResponse = await response.Content.ReadAsStringAsync();
-            RootImageObject? responseObject = JsonSerializer.Deserialize<RootImageObject>(stringResponse);
-
-            if (responseObject == null)
-            {
-                return ("", "");
-            }
-            
-            return (responseObject.Data[0].Url, responseObject.Data[0].RevisedPrompt);
+            string? url = imageData.Url;
+            return !String.IsNullOrWhiteSpace(url) ? url : "";
         }
-        catch (Exception)
+        catch
         {
-            return ("", "");
+            return "";
         }
     }
 
