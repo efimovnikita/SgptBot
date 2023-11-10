@@ -3,8 +3,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using OpenAI_API;
-using OpenAI_API.Chat;
+using OpenAiNg;
+using OpenAiNg.Chat;
 using SgptBot.Models;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
@@ -15,7 +15,6 @@ using Telegram.Bot.Types.ReplyMarkups;
 using File = Telegram.Bot.Types.File;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using Message = Telegram.Bot.Types.Message;
-using Model = OpenAI_API.Models.Model;
 
 namespace SgptBot.Services;
 
@@ -576,10 +575,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         if (strings.Length < 2)
         {
             // Defining buttons
-            InlineKeyboardButton gpt3Button = new("GPT 3.5") { CallbackData = "/model gpt3.5"};
-            InlineKeyboardButton gpt4Button = new("GPT 4") { CallbackData = "/model gpt4"};
+            InlineKeyboardButton gpt3Button = new("GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
+            InlineKeyboardButton gpt4Button = new("GPT-4 Turbo") { CallbackData = "/model gpt4"};
      
-            // Rows, every row is InlineKeyboardButton[], You can put multiple buttons!
             InlineKeyboardButton[] row1 = { gpt3Button, gpt4Button };
             
             // Buttons by rows
@@ -620,9 +618,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         var selectedModel = modelName.ToLower() switch
         {
-            "gpt3.5" => Models.Model.Gpt3,
-            "gpt4" => Models.Model.Gpt4,
-            _ => Models.Model.Gpt3
+            "gpt3.5" => Model.Gpt3,
+            "gpt4" => Model.Gpt4,
+            _ => Model.Gpt3
         };
 
         storeUser.Model = selectedModel;
@@ -630,7 +628,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         return await botClient.SendTextMessageAsync(
             chatId, 
-            $"Model '{selectedModel}' was set.",
+            $"Model '{(selectedModel == Model.Gpt3 ? "GPT-3.5 Turbo" : "GPT-4 Turbo")}' was set.",
             cancellationToken: cancellationToken);
     }
 
@@ -648,7 +646,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Last name: {storeUser.LastName}\n" +
             $"Username: {storeUser.UserName}\n" +
             $"OpenAI API key: {storeUser.ApiKey}\n" +
-            $"Model: {storeUser.Model}\n" +
+            $"Model: {(storeUser.Model == Model.Gpt3 ? "GPT-3.5 Turbo" : "GPT-4 Turbo")}\n" +
             $"Voice mode: {(storeUser.VoiceMode ? "on" : "off")}\n" +
             $"Image quality: {storeUser.ImgQuality.ToString().ToLower()}\n" +
             $"Image style: {storeUser.ImgStyle.ToString().ToLower()}\n" +
@@ -716,7 +714,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     private async Task<Message> TalkToModelCommand(ITelegramBotClient botClient, Message message, string messageText,
         CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -735,26 +733,26 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        OpenAIAPI api = new OpenAIAPI(storeUser.ApiKey);
+        OpenAiApi api = new(storeUser.ApiKey);
         
-        var chatMessages = new List<ChatMessage>();
+        List<ChatMessage> chatMessages = new();
 
-        var systemMessage = storeUser.Conversation.FirstOrDefault(m => m.Role == Role.System);
+        Models.Message? systemMessage = storeUser.Conversation.FirstOrDefault(m => m.Role == Role.System);
         if (systemMessage != null && String.IsNullOrWhiteSpace(systemMessage.Msg) == false)
         {
             chatMessages.Add(new ChatMessage(ChatMessageRole.System, systemMessage.Msg));
         }
 
-        foreach (var msg in storeUser.Conversation.Where(m => m.Role != Role.System))
+        foreach (Models.Message msg in storeUser.Conversation.Where(m => m.Role != Role.System))
         {
             chatMessages.Add(new ChatMessage(msg.Role == Role.Ai ? ChatMessageRole.Assistant : ChatMessageRole.User, msg.Msg));
         }
         
         chatMessages.Add(new ChatMessage(ChatMessageRole.User, messageText));
 
-        var request = new ChatRequest
+        ChatRequest request = new()
         {
-            Model = storeUser.Model == Models.Model.Gpt3 ? Model.ChatGPTTurbo : Model.GPT4,
+            Model = storeUser.Model == Model.Gpt3 ? OpenAiNg.Models.Model.ChatGPTTurbo1106 : OpenAiNg.Models.Model.GPT4_1106_Preview,
             Messages = chatMessages.ToArray()
         };
 
@@ -769,7 +767,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var response = result.Choices[0].Message.Content;
+        string? response = result.Choices?[0].Message?.Content;
         if (String.IsNullOrWhiteSpace(response))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Response from model is empty. Try again.",
