@@ -1,4 +1,5 @@
 using System.Text;
+using FFMpegCore;
 using Microsoft.Extensions.Logging;
 using OpenAiNg;
 using OpenAiNg.Audio;
@@ -83,6 +84,7 @@ public class UpdateHandler : IUpdateHandler
         string messageText = message.Text ?? await GetTranscriptionTextFromVoiceMessage(message, client, cancellationToken);
         if (String.IsNullOrEmpty(messageText))
         {
+            _logger.LogWarning("Message is empty. Return.");
             return;
         }
 
@@ -268,24 +270,35 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         File file = await client.GetFileAsync(voice.FileId, cancellationToken: cancellationToken);
 
         string path = Path.GetTempPath();
-        string fileName = Path.Combine(path, file.FileId + ".ogg");
+        string oggFileName = Path.Combine(path, file.FileId + ".ogg");
+        string mp3FileName = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetTempFileName(), "mp3"));
 
         if (file.FilePath != null)
         {
-            await using FileStream stream = System.IO.File.OpenWrite(fileName);
+            await using FileStream stream = System.IO.File.OpenWrite(oggFileName);
             await client.DownloadFileAsync(file.FilePath, stream, cancellationToken);
+
+            bool status = FFMpegArguments
+                .FromFileInput(oggFileName)
+                .OutputToFile(mp3FileName)
+                .ProcessSynchronously();
+            
+            if (status == false)
+            {
+                return "";
+            }
         }
         else
         {
             return "";
         }
 
-        if (System.IO.File.Exists(fileName) == false)
+        if (System.IO.File.Exists(oggFileName) == false)
         {
             return "";
         }
 
-        string responseText = await CreateTranscriptionAsync(storeUser.ApiKey, fileName);
+        string responseText = await CreateTranscriptionAsync(storeUser.ApiKey, mp3FileName);
         
         return !String.IsNullOrEmpty(responseText) ? responseText : "";
     }
@@ -301,7 +314,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             AudioFile audioFile = new()
             {
                 File = fileStream,
-                ContentType = "ogg",
+                ContentType = "audio/mp3",
                 Name = Path.GetFileName(filePath)
             };
 
