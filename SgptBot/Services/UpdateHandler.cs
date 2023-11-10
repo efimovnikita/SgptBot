@@ -84,7 +84,7 @@ public class UpdateHandler : IUpdateHandler
         string messageText = message.Text ?? await GetTranscriptionTextFromVoiceMessage(message, client, cancellationToken);
         if (String.IsNullOrEmpty(messageText))
         {
-            _logger.LogWarning("Message is empty. Return.");
+            _logger.LogWarning("[{MethodName}] Message is empty. Return.", nameof(BotOnMessageReceived));
             return;
         }
 
@@ -303,7 +303,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return !String.IsNullOrEmpty(responseText) ? responseText : "";
     }
 
-    private static async Task<string> CreateTranscriptionAsync(string token, string filePath)
+    private async Task<string> CreateTranscriptionAsync(string token, string filePath)
     {
         FileStream fileStream = new(filePath, FileMode.OpenOrCreate);
 
@@ -330,8 +330,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             
             return result != null ? result.Text : "";
         }
-        catch
+        catch (Exception e)
         {
+            _logger.LogWarning("[{MethodName}] {Error}", nameof(CreateTranscriptionAsync), e.Message);
             return String.Empty;
         }
         finally
@@ -813,7 +814,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             cancellationToken: cancellationToken);
     }
     
-    private static async Task<string?> GenerateImage(string prompt, string token, ImgStyle style,
+    private async Task<string?> GenerateImage(string prompt, string token, ImgStyle style,
         ImgQuality quality)
     {
         try
@@ -840,13 +841,14 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             string? url = imageData.Url;
             return !String.IsNullOrWhiteSpace(url) ? url : "";
         }
-        catch
+        catch (Exception e)
         {
+            _logger.LogWarning("[{MethodName}] {Error}", nameof(GenerateImage), e.Message);
             return "";
         }
     }
 
-    private static async Task<string> GetTtsAudio(string text, string token)
+    private async Task<string> GetTtsAudio(string text, string token)
     {
         try
         {
@@ -868,8 +870,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 
             return System.IO.File.Exists(path) ? path : "";
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            _logger.LogWarning("[{MethodName}] {Error}", nameof(GetTtsAudio), e.Message);
             return "";
         }
     }
