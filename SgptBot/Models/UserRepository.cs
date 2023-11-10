@@ -17,7 +17,7 @@ public class UserRepository
         _password = password;
     }
 
-    public StoreUser? GetUserOrCreate(long id, string firstName, string lastName, string userName, bool isAdministrator)
+    public StoreUser GetUserOrCreate(long id, string firstName, string lastName, string userName, bool isAdministrator)
     {
         // Ensure the directory exists. If doesn't, this function will create it.
         Directory.CreateDirectory(_folder);
