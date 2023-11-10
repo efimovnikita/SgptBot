@@ -5,6 +5,9 @@
         <TargetFramework>net6.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <Company>Maskedball corp.</Company>
+        <Product>GptBot</Product>
+        <AssemblyVersion>0.0.1</AssemblyVersion>
     </PropertyGroup>
 
     <ItemGroup>
