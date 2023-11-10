@@ -642,15 +642,16 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         return await botClient.SendTextMessageAsync(message.Chat.Id,
-            $"First name: {storeUser.FirstName}\n" +
-            $"Last name: {storeUser.LastName}\n" +
-            $"Username: {storeUser.UserName}\n" +
-            $"OpenAI API key: {storeUser.ApiKey}\n" +
-            $"Model: {(storeUser.Model == Model.Gpt3 ? "GPT-3.5 Turbo" : "GPT-4 Turbo")}\n" +
-            $"Voice mode: {(storeUser.VoiceMode ? "on" : "off")}\n" +
-            $"Image quality: {storeUser.ImgQuality.ToString().ToLower()}\n" +
-            $"Image style: {storeUser.ImgStyle.ToString().ToLower()}\n" +
-            $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}",
+            $"First name: `{storeUser.FirstName}`\n" +
+            $"Last name: `{storeUser.LastName}`\n" +
+            $"Username: `{storeUser.UserName}`\n" +
+            $"OpenAI API key: `{storeUser.ApiKey}`\n" +
+            $"Model: `{(storeUser.Model == Model.Gpt3 ? "GPT-3.5 Turbo" : "GPT-4 Turbo")}`\n" +
+            $"Voice mode: `{(storeUser.VoiceMode ? "on" : "off")}`\n" +
+            $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
+            $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
+            $"Context prompt: `{storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}`",
+            parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
     }
 
