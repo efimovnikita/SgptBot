@@ -99,6 +99,7 @@ public class UpdateHandler : IUpdateHandler
             "/history"               => HistoryCommand(_botClient, message, cancellationToken),
             "/about"                 => AboutCommand(_botClient, message, cancellationToken),
             "/users"                 => UsersCommand(_botClient, message, cancellationToken),
+            "/all_users"             => AllUsersCommand(_botClient, message, cancellationToken),
             "/allow"                 => AllowCommand(_botClient, message, cancellationToken),
             "/deny"                  => DenyCommand(_botClient, message, cancellationToken),
             "/toggle_voice"          => ToggleVoiceCommand(_botClient, message, cancellationToken),
@@ -109,6 +110,44 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> AllUsersCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser.IsAdministrator == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "This command might be executed only by the administrator.",
+                cancellationToken: cancellationToken);
+        }
+
+        StoreUser[] users = _userRepository.GetAllUsers();
+        
+        if (users.Any() == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "Users not found.",
+                cancellationToken: cancellationToken);
+        }
+
+        StringBuilder builder = new();
+        for (int i = 0; i < users.Length; i++)
+        {
+            StoreUser user = users[i];
+            builder.AppendLine(
+                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}");
+        }
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            builder.ToString(),
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ToggleImgStyleCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -908,7 +947,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             usage = usage + Environment.NewLine + "---\n" +
                     "/allow - allow user\n" +
                     "/deny - deny user\n" +
-                    "/users - show active users";
+                    "/users - show active users\n" +
+                    "/all_users - show all users";
         }
 
         return await botClient.SendTextMessageAsync(
