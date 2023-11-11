@@ -1,5 +1,4 @@
 using System.Text;
-using FFMpegCore;
 using Microsoft.Extensions.Logging;
 using OpenAiNg;
 using OpenAiNg.Audio;
@@ -271,22 +270,11 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         string path = Path.GetTempPath();
         string oggFileName = Path.Combine(path, file.FileId + ".ogg");
-        string mp3FileName = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetTempFileName(), "mp3"));
 
         if (file.FilePath != null)
         {
             await using FileStream stream = System.IO.File.OpenWrite(oggFileName);
             await client.DownloadFileAsync(file.FilePath, stream, cancellationToken);
-
-            bool status = FFMpegArguments
-                .FromFileInput(oggFileName)
-                .OutputToFile(mp3FileName)
-                .ProcessSynchronously();
-            
-            if (status == false)
-            {
-                return "";
-            }
         }
         else
         {
@@ -298,7 +286,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             return "";
         }
 
-        string responseText = await CreateTranscriptionAsync(storeUser.ApiKey, mp3FileName);
+        string responseText = await CreateTranscriptionAsync(storeUser.ApiKey, oggFileName);
         
         return !String.IsNullOrEmpty(responseText) ? responseText : "";
     }
@@ -314,7 +302,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             AudioFile audioFile = new()
             {
                 File = fileStream,
-                ContentType = "audio/mp3",
+                ContentType = "audio/ogg",
                 Name = Path.GetFileName(filePath)
             };
 
@@ -322,7 +310,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             {
                 File = audioFile,
                 Model = OpenAiNg.Models.Model.Whisper_1,
-                ResponseFormat = "text",
+                ResponseFormat = "json",
             };
 
             TranscriptionVerboseJsonResult? result =
