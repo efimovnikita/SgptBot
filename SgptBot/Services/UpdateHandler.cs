@@ -240,6 +240,23 @@ public class UpdateHandler : IUpdateHandler
                 replyToMessageId:  message.MessageId, 
                 cancellationToken: cancellationToken);
         }
+        
+        if (storeUser.VoiceMode)
+        {
+            _logger.LogInformation("Voice mode is active.");
+            _logger.LogInformation("Response length is: {length}", content.Length);
+
+            string ttsAudioFilePath = await GetTtsAudio(content.Replace(Environment.NewLine, ""), storeUser.ApiKey);
+            _logger.LogInformation("Path to tts audio message: {path}", ttsAudioFilePath);
+            
+            if (String.IsNullOrEmpty(ttsAudioFilePath) == false)
+            {
+                return await client.SendVoiceAsync(message.Chat.Id,
+                    InputFile.FromStream(System.IO.File.OpenRead(ttsAudioFilePath)),
+                    replyToMessageId: message.MessageId,
+                    cancellationToken: cancellationToken);
+            }
+        }
             
         return await client.SendTextMessageAsync(message.Chat.Id, content,
             replyToMessageId:  message.MessageId, 
