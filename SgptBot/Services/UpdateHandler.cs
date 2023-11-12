@@ -1,5 +1,8 @@
+using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using OpenAiNg;
 using OpenAiNg.Audio;
 using OpenAiNg.Chat;
@@ -79,7 +82,15 @@ public class UpdateHandler : IUpdateHandler
     private async Task BotOnMessageReceived(Message message, ITelegramBotClient client,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Receive message type: {MessageType}", message.Type);
+        MessageType messageType = message.Type;
+        _logger.LogInformation("Receive message type: {MessageType}", messageType);
+        
+        if (messageType == MessageType.Photo)
+        {
+            await SendPhotoToVisionModel(_botClient, message, cancellationToken);   
+            return;
+        }
+        
         string messageText = message.Text ?? await GetTranscriptionTextFromVoiceMessage(message, client, cancellationToken);
         if (String.IsNullOrEmpty(messageText))
         {
@@ -110,6 +121,147 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    // ReSharper disable once UnusedMethodReturnValue.Local
+    private async Task<Message> SendPhotoToVisionModel(ITelegramBotClient client, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, "Your api key is not set. Use '/key' command and set key.",
+                cancellationToken: cancellationToken);
+        }
+
+        if (storeUser is { IsBlocked: true, IsAdministrator: false })
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, "You are blocked. Wait for some time and try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        if (message.Photo is not {Length: > 0})
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, 
+                "Problem while saving a photo.",
+                cancellationToken: cancellationToken);
+        }
+
+        PhotoSize photoSize = message.Photo[^1];
+        
+        File file = await client.GetFileAsync(photoSize.FileId, cancellationToken: cancellationToken);
+
+        string path = Path.GetTempPath();
+        string fileName = Path.Combine(path, file.FileId + ".jpg");
+
+        if (file.FilePath != null)
+        {
+            await using FileStream stream = System.IO.File.OpenWrite(fileName);
+            await client.DownloadFileAsync(file.FilePath, stream, cancellationToken);
+        }
+        else
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, 
+                "Problem while saving a photo.",
+                cancellationToken: cancellationToken);
+        }
+
+        if (System.IO.File.Exists(fileName) == false)
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, 
+                "Problem while saving a photo.",
+                cancellationToken: cancellationToken);
+        }
+
+        string base64Image = ImageToBase64(fileName);
+        var payload = new
+        {
+            model = "gpt-4-vision-preview",
+            messages = new[]
+            {
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "text", text = $"{message.Caption}" },
+                        new 
+                        { 
+                            type = "image_url", 
+                            image_url = new { url = $"data:image/jpeg;base64,{base64Image}" }
+                        }
+                    }
+                }
+            },
+            max_tokens = 2500
+        };
+        
+        // Convert payload to JSON string
+        string jsonContent = JsonConvert.SerializeObject(payload);
+
+        // Prepare the HTTP client
+        HttpClient httpClient = new();
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", storeUser.ApiKey);
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        // The URL to call
+
+        // Send the POST request
+        HttpResponseMessage response = await httpClient.PostAsync(
+            "https://api.openai.com/v1/chat/completions",
+            new StringContent(jsonContent, Encoding.UTF8, "application/json"), cancellationToken);
+
+        // Read the response as a string
+        string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+        
+        JObject parsedJson = JObject.Parse(responseString);
+        string content;
+        try
+        {
+            content = (string) parsedJson["choices"]?[0]?["message"]?["content"]!;
+        }
+        catch (Exception)
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, 
+                "Error while getting response about the image",
+                replyToMessageId:  message.MessageId, 
+                cancellationToken: cancellationToken);
+        }
+        
+        if (String.IsNullOrEmpty(content))
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, 
+                "Error while getting response about the image",
+                replyToMessageId:  message.MessageId, 
+                cancellationToken: cancellationToken);
+        }
+            
+        return await client.SendTextMessageAsync(message.Chat.Id, content,
+            replyToMessageId:  message.MessageId, 
+            cancellationToken: cancellationToken);
+    }
+
+    private static string ImageToBase64(string imagePath)
+    {
+        try
+        {
+            // Read the file as a byte array
+            byte[] imageBytes = System.IO.File.ReadAllBytes(imagePath);
+
+            // Convert byte array to base64 string
+            string base64String = Convert.ToBase64String(imageBytes);
+
+            return base64String;
+        }
+        catch (Exception)
+        {
+            return String.Empty;
+        }
     }
 
     private async Task<Message> AllUsersCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
