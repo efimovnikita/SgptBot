@@ -259,6 +259,7 @@ public class UpdateHandler : IUpdateHandler
         }
             
         return await client.SendTextMessageAsync(message.Chat.Id, content,
+            parseMode: ParseMode.Markdown,
             replyToMessageId:  message.MessageId, 
             cancellationToken: cancellationToken);
     }
