@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -652,7 +653,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> UsersCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -666,9 +667,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var users = _userRepository.GetAllUsers();
-        var activeUsers = users
-            .Where(user => String.IsNullOrWhiteSpace(user.ApiKey) == false)
+        StoreUser[] users = _userRepository.GetAllUsers();
+        StoreUser[] activeUsers = users
+            .Where(user => String.IsNullOrWhiteSpace(user.ApiKey) == false && IsMatchSkPattern(user.ApiKey))
             .ToArray();
         
         if (activeUsers.Any() == false)
@@ -678,10 +679,10 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var builder = new StringBuilder();
-        for (var i = 0; i < activeUsers.Length; i++)
+        StringBuilder builder = new();
+        for (int i = 0; i < activeUsers.Length; i++)
         {
-            var user = activeUsers[i];
+            StoreUser user = activeUsers[i];
             builder.AppendLine(
                 $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}");
         }
@@ -690,6 +691,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             builder.ToString(),
             cancellationToken: cancellationToken);
     }
+    
+    public static bool IsMatchSkPattern(string input) => Regex.IsMatch(input, @"^sk-[A-Za-z0-9]+$");
 
     private async Task<Message> AboutCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
