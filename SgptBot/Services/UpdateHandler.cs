@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
+using Humanizer;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -312,8 +313,9 @@ public class UpdateHandler : IUpdateHandler
         for (int i = 0; i < users.Length; i++)
         {
             StoreUser user = users[i];
+            string lastActivityMessage = GetLastActivityMessage(user.ActivityTime);
             builder.AppendLine(
-                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}");
+                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago;");
         }
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, 
@@ -683,8 +685,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         for (int i = 0; i < activeUsers.Length; i++)
         {
             StoreUser user = activeUsers[i];
+            string lastActivityMessage = GetLastActivityMessage(user.ActivityTime);
             builder.AppendLine(
-                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}");
+                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago;");
         }
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, 
@@ -692,7 +695,15 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             cancellationToken: cancellationToken);
     }
     
-    public static bool IsMatchSkPattern(string input) => Regex.IsMatch(input, @"^sk-[A-Za-z0-9]+$");
+    private static string GetLastActivityMessage(DateTime lastActivity)
+    {
+        DateTime current = DateTime.Now;
+        TimeSpan timeSinceLastActivity = current - lastActivity;
+        string humanizedTimeSinceLastActivity = timeSinceLastActivity.Humanize();
+        return humanizedTimeSinceLastActivity;
+    }
+
+    private static bool IsMatchSkPattern(string input) => Regex.IsMatch(input, @"^sk-[A-Za-z0-9]+$");
 
     private async Task<Message> AboutCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {

@@ -49,6 +49,8 @@ public class UserRepository
             });
         var users = db.GetCollection<StoreUser>("Users");
 
+        updateUser.ActivityTime = DateTime.Now;
+        
         return users.Update(updateUser);
     }
     
