@@ -300,7 +300,7 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
 
-        StoreUser[] users = _userRepository.GetAllUsers();
+        StoreUser[] users = _userRepository.GetAllUsers().OrderByDescending(user => user.ActivityTime).ToArray();
         
         if (users.Any() == false)
         {
@@ -672,6 +672,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         StoreUser[] users = _userRepository.GetAllUsers();
         StoreUser[] activeUsers = users
             .Where(user => String.IsNullOrWhiteSpace(user.ApiKey) == false && IsMatchSkPattern(user.ApiKey))
+            .OrderByDescending(user => user.ActivityTime)
             .ToArray();
         
         if (activeUsers.Any() == false)

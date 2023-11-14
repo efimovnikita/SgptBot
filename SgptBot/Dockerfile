@@ -8,7 +8,10 @@ RUN dotnet publish -c Release -o out
 FROM mcr.microsoft.com/dotnet/runtime:6.0-alpine as final
 
 RUN apk add --no-cache openssl=3.1.4-r0
+RUN apk add --no-cache icu-libs krb5-libs libgcc libintl libssl1.1 libstdc++ zlib
 
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+   
 WORKDIR /app
 COPY --from=build-env /app/out .
 ENTRYPOINT ["dotnet", "SgptBot.dll"]

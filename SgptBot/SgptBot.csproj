@@ -8,6 +8,7 @@
         <Company>Maskedball corp.</Company>
         <Product>GptBot</Product>
         <AssemblyVersion>0.0.1</AssemblyVersion>
+        <InvariantGlobalization>false</InvariantGlobalization>
     </PropertyGroup>
 
     <ItemGroup>
