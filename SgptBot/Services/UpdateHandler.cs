@@ -120,14 +120,14 @@ public class UpdateHandler : IUpdateHandler
             "/toggle_img_quality"    => ToggleImgQualityCommand(_botClient, message, cancellationToken),
             "/toggle_img_style"      => ToggleImgStyleCommand(_botClient, message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
-            "/buffer"                => BufferCommand(_botClient, message, cancellationToken),
+            "/append"                => AppendCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
     }
 
-    private async Task<Message> BufferCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    private async Task<Message> AppendCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
@@ -140,7 +140,7 @@ public class UpdateHandler : IUpdateHandler
         if (strings.Length < 2)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
-                "After the '/buffer' command you must input the part of your (potentially huge) prompt. Try again.",
+                "After the '/append' command you must input the part of your (potentially huge) prompt. Try again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -148,7 +148,7 @@ public class UpdateHandler : IUpdateHandler
         if (String.IsNullOrWhiteSpace(contextPrompt))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
-                "After the '/buffer' command you must input the part of your (potentially huge) prompt. Try again.",
+                "After the '/append' command you must input the part of your (potentially huge) prompt. Try again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -1085,7 +1085,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
         
-        string filePath = CreateMarkdownFileWithUniqueName(response);
+        string filePath = CreateMarkdownFileWithUniqueName(response, storeUser.Id);
 
         // Create a FileStream to your text file
         await using FileStream fileStream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -1096,17 +1096,17 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return await botClient.SendDocumentAsync(
             chatId: message.Chat.Id,
             document: inputFile,
-            caption: "Here's your answer!", 
+            caption: "Your answer was too long for sending through telegram. Here is the file with your answer.", 
             cancellationToken: cancellationToken);
     }
-    
-    public static string CreateMarkdownFileWithUniqueName(string content)
+
+    private static string CreateMarkdownFileWithUniqueName(string content, long storeUserId)
     {
         // Get the path to the temp directory
         string tempPath = Path.GetTempPath();
 
         // Generate a unique filename with the .md extension
-        string fileName = Path.ChangeExtension(Path.GetRandomFileName(), ".md");
+        string fileName = Path.ChangeExtension($"{storeUserId}_{DateTime.Now}", ".md");
 
         // Combine the temp path with the file name to get the full file path
         string filePath = Path.Combine(tempPath, fileName);
@@ -1208,6 +1208,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/key - set an OpenAI API key\n" +
                        "/model - choose the GPT model to work with\n" +
                        "/context - set the context message\n" +
+                       "/append - append text to your last message\n" +
                        "/reset_context - reset the context message\n" +
                        "/history - view the conversation history\n" +
                        "/reset - reset the current conversation\n" +
