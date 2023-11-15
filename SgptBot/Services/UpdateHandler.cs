@@ -181,34 +181,48 @@ public class UpdateHandler : IUpdateHandler
         SgptBot.Models.Message? lastUserMessage = userMessages.LastOrDefault();
         return lastUserMessage;
     }
-
-    // ReSharper disable once UnusedMethodReturnValue.Local
-    private async Task<Message> SendPhotoToVisionModel(ITelegramBotClient client, Message message, CancellationToken cancellationToken)
+    
+    private static async Task<bool> ValidateUser(StoreUser? user, ITelegramBotClient client, long chatId)
     {
-        StoreUser? storeUser = GetStoreUser(message.From);
-        if (storeUser == null)
+        if (user == null)
         {
-            return await client.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
-                cancellationToken: cancellationToken);
+            await client.SendTextMessageAsync(chatId, "Error getting the user from the store.");
+            return false;
         }
         
-        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+        if (String.IsNullOrWhiteSpace(user.ApiKey))
         {
-            return await client.SendTextMessageAsync(message.Chat.Id, "Your api key is not set. Use '/key' command and set key.",
-                cancellationToken: cancellationToken);
+            await client.SendTextMessageAsync(chatId, "Your api key is not set. Use '/key' command and set key.");
+            return false;
         }
 
-        if (storeUser is { IsBlocked: true, IsAdministrator: false })
+        if (user is {IsAdministrator: false, IsBlocked: true})
         {
-            return await client.SendTextMessageAsync(message.Chat.Id, "You are blocked. Wait for some time and try again.",
+            await client.SendTextMessageAsync(chatId, "You are blocked. Wait for some time and try again.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task SendPhotoToVisionModel(ITelegramBotClient client, Message message,
+        CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (await ValidateUser(storeUser, client, message.Chat.Id) == false)
+        {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                "Error: User validation failed.",
                 cancellationToken: cancellationToken);
+            return;
         }
 
         if (message.Photo is not {Length: > 0})
         {
-            return await client.SendTextMessageAsync(message.Chat.Id, 
+            await client.SendTextMessageAsync(message.Chat.Id, 
                 "Problem while saving a photo.",
                 cancellationToken: cancellationToken);
+            return;
         }
 
         PhotoSize photoSize = message.Photo[^1];
@@ -225,47 +239,29 @@ public class UpdateHandler : IUpdateHandler
         }
         else
         {
-            return await client.SendTextMessageAsync(message.Chat.Id, 
+            await client.SendTextMessageAsync(message.Chat.Id, 
                 "Problem while saving a photo.",
                 cancellationToken: cancellationToken);
+            return;
         }
 
         if (System.IO.File.Exists(fileName) == false)
         {
-            return await client.SendTextMessageAsync(message.Chat.Id, 
+            await client.SendTextMessageAsync(message.Chat.Id, 
                 "Problem while saving a photo.",
                 cancellationToken: cancellationToken);
+            return;
         }
 
         string base64Image = ImageToBase64(fileName);
-        var payload = new
-        {
-            model = "gpt-4-vision-preview",
-            messages = new[]
-            {
-                new
-                {
-                    role = "user",
-                    content = new object[]
-                    {
-                        new { type = "text", text = $"{message.Caption}" },
-                        new 
-                        { 
-                            type = "image_url", 
-                            image_url = new { url = $"data:image/jpeg;base64,{base64Image}" }
-                        }
-                    }
-                }
-            },
-            max_tokens = 2500
-        };
+        object payload = GetPayload(base64Image, message.Caption);
         
         // Convert payload to JSON string
         string jsonContent = JsonConvert.SerializeObject(payload);
 
         // Prepare the HTTP client
         HttpClient httpClient = new();
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", storeUser.ApiKey);
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", storeUser!.ApiKey);
         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // The URL to call
@@ -286,41 +282,76 @@ public class UpdateHandler : IUpdateHandler
         }
         catch (Exception)
         {
-            return await client.SendTextMessageAsync(message.Chat.Id, 
+            await client.SendTextMessageAsync(message.Chat.Id, 
                 "Error while getting response about the image",
                 replyToMessageId:  message.MessageId, 
                 cancellationToken: cancellationToken);
+            return;
         }
         
         if (String.IsNullOrEmpty(content))
         {
-            return await client.SendTextMessageAsync(message.Chat.Id, 
+            await client.SendTextMessageAsync(message.Chat.Id, 
                 "Error while getting response about the image",
                 replyToMessageId:  message.MessageId, 
                 cancellationToken: cancellationToken);
+            return;
         }
-        
-        if (storeUser.VoiceMode)
-        {
-            _logger.LogInformation("Voice mode is active.");
-            _logger.LogInformation("Response length is: {length}", content.Length);
 
-            string ttsAudioFilePath = await GetTtsAudio(content.Replace(Environment.NewLine, ""), storeUser.ApiKey);
-            _logger.LogInformation("Path to tts audio message: {path}", ttsAudioFilePath);
-            
-            if (String.IsNullOrEmpty(ttsAudioFilePath) == false)
-            {
-                return await client.SendVoiceAsync(message.Chat.Id,
-                    InputFile.FromStream(System.IO.File.OpenRead(ttsAudioFilePath)),
-                    replyToMessageId: message.MessageId,
-                    cancellationToken: cancellationToken);
-            }
+        if (!storeUser.VoiceMode)
+        {
+            await client.SendTextMessageAsync(message.Chat.Id, content,
+                parseMode: ParseMode.Markdown,
+                replyToMessageId: message.MessageId,
+                cancellationToken: cancellationToken);
+            return;
         }
+
+        _logger.LogInformation("Voice mode is active.");
+        _logger.LogInformation("Response length is: {length}", content.Length);
+
+        string ttsAudioFilePath = await GetTtsAudio(content.Replace(Environment.NewLine, ""), storeUser.ApiKey);
+        _logger.LogInformation("Path to tts audio message: {path}", ttsAudioFilePath);
             
-        return await client.SendTextMessageAsync(message.Chat.Id, content,
+        if (String.IsNullOrEmpty(ttsAudioFilePath) == false)
+        {
+            await client.SendVoiceAsync(message.Chat.Id,
+                InputFile.FromStream(System.IO.File.OpenRead(ttsAudioFilePath)),
+                replyToMessageId: message.MessageId,
+                cancellationToken: cancellationToken);
+            return;
+        }
+
+        await client.SendTextMessageAsync(message.Chat.Id, content,
             parseMode: ParseMode.Markdown,
             replyToMessageId:  message.MessageId, 
             cancellationToken: cancellationToken);
+    }
+
+    private static object GetPayload(string base64Image, string? caption)
+    {
+        var payload = new
+        {
+            model = "gpt-4-vision-preview",
+            messages = new[]
+            {
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "text", text = $"{caption}" },
+                        new 
+                        { 
+                            type = "image_url", 
+                            image_url = new { url = $"data:image/jpeg;base64,{base64Image}" }
+                        }
+                    }
+                }
+            },
+            max_tokens = 2500
+        };
+        return payload;
     }
 
     private static string ImageToBase64(string imagePath)
