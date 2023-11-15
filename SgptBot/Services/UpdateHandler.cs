@@ -171,7 +171,7 @@ public class UpdateHandler : IUpdateHandler
         
         return await botClient.SendTextMessageAsync(
             message.Chat.Id, 
-            $"Text was added to the buffer. Token count for the last message: {tokenCount}.",
+            $"Text was appended to the last message. Token count for the last message: {tokenCount}.",
             cancellationToken: cancellationToken);
     }
 
@@ -1106,8 +1106,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         string tempPath = Path.GetTempPath();
 
         // Generate a unique filename with the .md extension
-        string fileName = Path.ChangeExtension($"{storeUserId}_{DateTime.Now}", ".md");
-
+        string fileName = Path.ChangeExtension(Path.GetRandomFileName(), ".md");
+        fileName = $"{storeUserId}_{fileName}";
+        
         // Combine the temp path with the file name to get the full file path
         string filePath = Path.Combine(tempPath, fileName);
 
