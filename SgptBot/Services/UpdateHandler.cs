@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using Humanizer;
+using Microsoft.DeepDev;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -119,10 +120,66 @@ public class UpdateHandler : IUpdateHandler
             "/toggle_img_quality"    => ToggleImgQualityCommand(_botClient, message, cancellationToken),
             "/toggle_img_style"      => ToggleImgStyleCommand(_botClient, message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
+            "/buffer"                => BufferCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> BufferCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/buffer' command you must input the part of your (potentially huge) prompt. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string contextPrompt = String.Join(' ', strings.Skip(1));
+        if (String.IsNullOrWhiteSpace(contextPrompt))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/buffer' command you must input the part of your (potentially huge) prompt. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        Models.Message? lastUserMessage = GetLastUserMessage(storeUser);
+
+        ITokenizer tokenizer = await TokenizerBuilder.CreateByModelNameAsync("gpt-4");
+
+        if (lastUserMessage != null)
+        {
+            lastUserMessage.Msg += contextPrompt;
+        }
+        else
+        {
+            storeUser.Conversation.Add(new SgptBot.Models.Message(Role.User, contextPrompt));
+        }
+        
+        int tokenCount = tokenizer.Encode(GetLastUserMessage(storeUser)!.Msg, Array.Empty<string>()).Count;
+
+        _userRepository.UpdateUser(storeUser);
+        
+        return await botClient.SendTextMessageAsync(
+            message.Chat.Id, 
+            $"Text was added to the buffer. Token count for the last message: {tokenCount}.",
+            cancellationToken: cancellationToken);
+    }
+
+    private static Models.Message? GetLastUserMessage(StoreUser storeUser)
+    {
+        SgptBot.Models.Message[] userMessages = storeUser.Conversation.Where(msg => msg.Role == Role.User).ToArray();
+        SgptBot.Models.Message? lastUserMessage = userMessages.LastOrDefault();
+        return lastUserMessage;
     }
 
     // ReSharper disable once UnusedMethodReturnValue.Local
@@ -1021,9 +1078,44 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             }
         }
         
-        return await botClient.SendTextMessageAsync(message.Chat.Id, response,
-            parseMode: ParseMode.Markdown, replyToMessageId:  message.MessageId, 
+        if (response.Length >= 4000 == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, response,
+                parseMode: ParseMode.Markdown, replyToMessageId:  message.MessageId, 
+                cancellationToken: cancellationToken);
+        }
+        
+        string filePath = CreateMarkdownFileWithUniqueName(response);
+
+        // Create a FileStream to your text file
+        await using FileStream fileStream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        // Create a new InputOnlineFile from the FileStream
+        InputFileStream inputFile = new(fileStream, Path.GetFileName(filePath));
+
+        // Send the file to the specified chat ID
+        return await botClient.SendDocumentAsync(
+            chatId: message.Chat.Id,
+            document: inputFile,
+            caption: "Here's your answer!", 
             cancellationToken: cancellationToken);
+    }
+    
+    public static string CreateMarkdownFileWithUniqueName(string content)
+    {
+        // Get the path to the temp directory
+        string tempPath = Path.GetTempPath();
+
+        // Generate a unique filename with the .md extension
+        string fileName = Path.ChangeExtension(Path.GetRandomFileName(), ".md");
+
+        // Combine the temp path with the file name to get the full file path
+        string filePath = Path.Combine(tempPath, fileName);
+
+        // Write the content to the file
+        System.IO.File.WriteAllText(filePath, content);
+
+        // Return the full path of the created file
+        return filePath;
     }
     
     private async Task<string?> GenerateImage(string prompt, string token, ImgStyle style,

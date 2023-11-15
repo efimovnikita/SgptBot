@@ -9,5 +9,5 @@ public class Message
     }
 
     public Role Role { get; }
-    public string Msg { get; }
+    public string Msg { get; set; }
 }

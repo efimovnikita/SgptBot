@@ -19,6 +19,7 @@
         <PackageReference Include="Telegram.Bot" Version="19.0.0" />
         <PackageReference Include="OpenAiNg" Version="2.2.9" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="Microsoft.DeepDev.TokenizerLib" Version="1.3.2" />
     </ItemGroup>
 
 </Project>
