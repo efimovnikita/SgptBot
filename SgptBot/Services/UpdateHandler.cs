@@ -97,7 +97,17 @@ public class UpdateHandler : IUpdateHandler
             return;
         }
         
-        string messageText = message.Text ?? await GetTranscriptionTextFromVoiceMessage(message, client, cancellationToken);
+        string? messageText = message.Text;
+        if (messageText == null && messageType == MessageType.Voice)
+        {
+            messageText = await GetTranscriptionTextFromVoiceMessage(message, client, cancellationToken);
+        }
+        
+        if (messageText == null && messageType == MessageType.Document)
+        {
+            messageText = await GetTextFromDocumentMessage(message, client, cancellationToken);
+        }
+
         if (String.IsNullOrEmpty(messageText))
         {
             _logger.LogWarning("[{MethodName}] Message is empty. Return.", nameof(BotOnMessageReceived));
@@ -128,6 +138,83 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    // ReSharper disable once CognitiveComplexity
+    private async Task<string?> GetTextFromDocumentMessage(Message message, ITelegramBotClient client, CancellationToken cancellationToken)
+    {
+        try
+        {
+            StoreUser? storeUser = GetStoreUser(message.From);
+            if (storeUser == null)
+            {
+                return "";
+            }
+
+            if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+            {
+                return "";
+            }
+
+            if (storeUser is { IsBlocked: true, IsAdministrator: false })
+            {
+                return "";
+            }
+
+            Document? document = message.Document;
+            if (document == null)
+            {
+                return "";
+            }
+        
+            if (String.IsNullOrEmpty(document.FileName))
+            {
+                return "";
+            }
+
+            string extension = Path.GetExtension(document.FileName);
+            if (extension is not (".md" or ".txt"))
+            {
+                await client.SendTextMessageAsync(message.Chat.Id, 
+                    "Bot supports only '*.txt' or '*.md' formats.",
+                    cancellationToken: cancellationToken);
+                return "";
+            }
+
+            File file = await client.GetFileAsync(document.FileId, cancellationToken: cancellationToken);
+
+            string path = Path.GetTempPath();
+            string fullDocumentFileName = Path.Combine(path, document.FileName);
+
+            if (file.FilePath != null)
+            {
+                await using FileStream stream = System.IO.File.OpenWrite(fullDocumentFileName);
+                await client.DownloadFileAsync(file.FilePath, stream, cancellationToken);
+            }
+            else
+            {
+                return "";
+            }
+
+            if (System.IO.File.Exists(fullDocumentFileName) == false)
+            {
+                return "";
+            }
+
+            string text = await System.IO.File.ReadAllTextAsync(fullDocumentFileName, cancellationToken);
+            
+            if (String.IsNullOrEmpty(message.Caption) == false)
+            {
+                text += $"\n{message.Caption}";
+            }
+            
+            return text;
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning("[{MethodName}] {Error}", nameof(GetTextFromDocumentMessage), e.Message);
+            return "";
+        }
     }
 
     private async Task<Message> AppendCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
