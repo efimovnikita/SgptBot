@@ -405,9 +405,26 @@ public class UpdateHandler : IUpdateHandler
             builder.AppendLine(
                 $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago;");
         }
+
+        if (builder.ToString().Length >= 4000 == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                builder.ToString(),
+                cancellationToken: cancellationToken);
+        }
         
-        return await botClient.SendTextMessageAsync(message.Chat.Id, 
-            builder.ToString(),
+        string filePath = CreateMarkdownFileWithUniqueName(builder.ToString(), storeUser.Id);
+
+        // Create a FileStream to your text file
+        await using FileStream fileStream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        // Create a new InputOnlineFile from the FileStream
+        InputFileStream inputFile = new(fileStream, Path.GetFileName(filePath));
+
+        // Send the file to the specified chat ID
+        return await botClient.SendDocumentAsync(
+            chatId: message.Chat.Id,
+            document: inputFile,
+            caption: "Your answer was too long for sending through telegram. Here is the file with your answer.", 
             cancellationToken: cancellationToken);
     }
 
