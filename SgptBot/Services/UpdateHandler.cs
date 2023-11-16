@@ -28,6 +28,7 @@ public class UpdateHandler : IUpdateHandler
     private readonly ILogger<UpdateHandler> _logger;
     private readonly ApplicationSettings _appSettings;
     private readonly UserRepository _userRepository;
+    private readonly ITokenizer _tokenizer;
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         UserRepository userRepository)
@@ -36,6 +37,7 @@ public class UpdateHandler : IUpdateHandler
         _logger = logger;
         _appSettings = appSettings;
         _userRepository = userRepository;
+        _tokenizer = TokenizerBuilder.CreateByModelNameAsync("gpt-4").Result;
     }
 
     public async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken cancellationToken)
@@ -153,9 +155,7 @@ public class UpdateHandler : IUpdateHandler
         }
 
         Models.Message? lastUserMessage = GetLastUserMessage(storeUser);
-
-        ITokenizer tokenizer = await TokenizerBuilder.CreateByModelNameAsync("gpt-4");
-
+        
         if (lastUserMessage != null)
         {
             lastUserMessage.Msg += contextPrompt;
@@ -165,7 +165,7 @@ public class UpdateHandler : IUpdateHandler
             storeUser.Conversation.Add(new SgptBot.Models.Message(Role.User, contextPrompt));
         }
         
-        int tokenCount = tokenizer.Encode(GetLastUserMessage(storeUser)!.Msg, Array.Empty<string>()).Count;
+        int tokenCount = GetTokenCount(GetLastUserMessage(storeUser)!.Msg);
 
         _userRepository.UpdateUser(storeUser);
         
@@ -173,6 +173,11 @@ public class UpdateHandler : IUpdateHandler
             message.Chat.Id, 
             $"Text was appended to the last message. Token count for the last message: {tokenCount}.",
             cancellationToken: cancellationToken);
+    }
+
+    private int GetTokenCount(string text)
+    {
+        return _tokenizer.Encode(text, Array.Empty<string>()).Count;
     }
 
     private static Models.Message? GetLastUserMessage(StoreUser storeUser)
@@ -413,19 +418,7 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
         
-        string filePath = CreateMarkdownFileWithUniqueName(builder.ToString(), storeUser.Id);
-
-        // Create a FileStream to your text file
-        await using FileStream fileStream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        // Create a new InputOnlineFile from the FileStream
-        InputFileStream inputFile = new(fileStream, Path.GetFileName(filePath));
-
-        // Send the file to the specified chat ID
-        return await botClient.SendDocumentAsync(
-            chatId: message.Chat.Id,
-            document: inputFile,
-            caption: "Your answer was too long for sending through telegram. Here is the file with your answer.", 
-            cancellationToken: cancellationToken);
+        return await SendDocumentResponseAsync(builder.ToString(), botClient, message.Chat.Id, storeUser.Id, cancellationToken);
     }
 
     private async Task<Message> ToggleImgStyleCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -961,12 +954,20 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> InfoCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
+
+        StringBuilder builder = new();
+        foreach (SgptBot.Models.Message msg in storeUser.Conversation)
+        {
+            builder.Append(msg);
+        }
+
+        int tokenCount = GetTokenCount(builder.ToString());
 
         return await botClient.SendTextMessageAsync(message.Chat.Id,
             $"First name: `{storeUser.FirstName}`\n" +
@@ -977,6 +978,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Voice mode: `{(storeUser.VoiceMode ? "on" : "off")}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
             $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
+            $"Current context window size (number of tokens): `{tokenCount}`\n" +
             $"Context prompt: `{storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}`",
             parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
@@ -1091,8 +1093,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
         catch (Exception e)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, e.Message,
-                cancellationToken: cancellationToken);
+            if (e.Message.Length >= 4000 == false)
+            {
+                return await botClient.SendTextMessageAsync(message.Chat.Id, e.Message,
+                    cancellationToken: cancellationToken);
+            }
+            
+            return await SendDocumentResponseAsync(e.Message, botClient, message.Chat.Id, storeUser.Id, cancellationToken);
         }
 
         string? response = result.Choices?[0].Message?.Content;
@@ -1133,7 +1140,15 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
         
-        string filePath = CreateMarkdownFileWithUniqueName(response, storeUser.Id);
+        return await SendDocumentResponseAsync(response, botClient, message.Chat.Id, storeUser.Id, cancellationToken);
+    }
+
+    private static async Task<Message> SendDocumentResponseAsync(string text, ITelegramBotClient botClient,
+        long chatId,
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        string filePath = CreateMarkdownFileWithUniqueName(text, userId);
 
         // Create a FileStream to your text file
         await using FileStream fileStream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -1142,7 +1157,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         // Send the file to the specified chat ID
         return await botClient.SendDocumentAsync(
-            chatId: message.Chat.Id,
+            chatId: chatId,
             document: inputFile,
             caption: "Your answer was too long for sending through telegram. Here is the file with your answer.", 
             cancellationToken: cancellationToken);
