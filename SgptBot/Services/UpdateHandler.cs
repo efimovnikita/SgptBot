@@ -25,6 +25,7 @@ namespace SgptBot.Services;
 
 public class UpdateHandler : IUpdateHandler
 {
+    private const int MaxMsgLength = 4000;
     private readonly ITelegramBotClient _botClient;
     private readonly ILogger<UpdateHandler> _logger;
     private readonly ApplicationSettings _appSettings;
@@ -140,24 +141,16 @@ public class UpdateHandler : IUpdateHandler
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
     }
 
-    // ReSharper disable once CognitiveComplexity
     private async Task<string?> GetTextFromDocumentMessage(Message message, ITelegramBotClient client, CancellationToken cancellationToken)
     {
         try
         {
             StoreUser? storeUser = GetStoreUser(message.From);
-            if (storeUser == null)
+            if (await ValidateUser(storeUser, client, message.Chat.Id) == false)
             {
-                return "";
-            }
-
-            if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
-            {
-                return "";
-            }
-
-            if (storeUser is { IsBlocked: true, IsAdministrator: false })
-            {
+                await client.SendTextMessageAsync(message.Chat.Id,
+                    "Error: User validation failed.",
+                    cancellationToken: cancellationToken);
                 return "";
             }
 
@@ -465,18 +458,18 @@ public class UpdateHandler : IUpdateHandler
         }
     }
 
-    private async Task<Message> AllUsersCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    private async Task<Message> AllUsersCommand(ITelegramBotClient client, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+            return await client.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
         
         if (storeUser.IsAdministrator == false)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            return await client.SendTextMessageAsync(message.Chat.Id, 
                 "This command might be executed only by the administrator.",
                 cancellationToken: cancellationToken);
         }
@@ -485,7 +478,7 @@ public class UpdateHandler : IUpdateHandler
         
         if (users.Any() == false)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            return await client.SendTextMessageAsync(message.Chat.Id, 
                 "Users not found.",
                 cancellationToken: cancellationToken);
         }
@@ -498,15 +491,12 @@ public class UpdateHandler : IUpdateHandler
             builder.AppendLine(
                 $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago;");
         }
-
-        if (builder.ToString().Length >= 4000 == false)
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, 
-                builder.ToString(),
-                cancellationToken: cancellationToken);
-        }
         
-        return await SendDocumentResponseAsync(builder.ToString(), botClient, message.Chat.Id, storeUser.Id, cancellationToken);
+        return await SendBotResponseDependingOnMsgLength(msg: builder.ToString(),
+            client: client,
+            chatId: message.Chat.Id,
+            userId: storeUser.Id, 
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ToggleImgStyleCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -1128,30 +1118,18 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             cancellationToken: cancellationToken);
     }
 
-    // ReSharper disable once CognitiveComplexity
     private async Task<Message> TalkToModelCommand(ITelegramBotClient botClient, Message message, string messageText,
         CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
-        if (storeUser == null)
+        if (await ValidateUser(storeUser, botClient, message.Chat.Id) == false)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
-                cancellationToken: cancellationToken);
-        }
-        
-        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Your api key is not set. Use '/key' command and set key.",
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "Error: User validation failed.",
                 cancellationToken: cancellationToken);
         }
 
-        if (storeUser is { IsBlocked: true, IsAdministrator: false })
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "You are blocked. Wait for some time and try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        OpenAiApi api = new(storeUser.ApiKey);
+        OpenAiApi api = new(storeUser!.ApiKey);
         
         List<ChatMessage> chatMessages = new();
 
@@ -1181,13 +1159,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
         catch (Exception e)
         {
-            if (e.Message.Length >= 4000 == false)
-            {
-                return await botClient.SendTextMessageAsync(message.Chat.Id, e.Message,
-                    cancellationToken: cancellationToken);
-            }
-            
-            return await SendDocumentResponseAsync(e.Message, botClient, message.Chat.Id, storeUser.Id, cancellationToken);
+            return await SendBotResponseDependingOnMsgLength(msg: e.Message,
+                client: botClient,
+                chatId: message.Chat.Id,
+                userId: storeUser.Id,
+                cancellationToken: cancellationToken, 
+                replyMsgId: message.MessageId);
         }
 
         string? response = result.Choices?[0].Message?.Content;
@@ -1221,14 +1198,27 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             }
         }
         
-        if (response.Length >= 4000 == false)
+        return await SendBotResponseDependingOnMsgLength(response, botClient, message.Chat.Id, storeUser.Id, cancellationToken, message.MessageId, ParseMode.Markdown);
+    }
+
+    private static Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
+        long chatId,
+        long userId, CancellationToken cancellationToken, int? replyMsgId = null, ParseMode? parseMode = null)
+    {
+        if (msg.Length >= MaxMsgLength == false)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, response,
-                parseMode: ParseMode.Markdown, replyToMessageId:  message.MessageId, 
+            return client.SendTextMessageAsync(chatId: chatId,
+                text: msg,
+                parseMode: parseMode,
+                replyToMessageId: replyMsgId,
                 cancellationToken: cancellationToken);
         }
-        
-        return await SendDocumentResponseAsync(response, botClient, message.Chat.Id, storeUser.Id, cancellationToken);
+
+        return SendDocumentResponseAsync(text: msg,
+            botClient: client,
+            chatId: chatId,
+            userId: userId,
+            cancellationToken: cancellationToken);
     }
 
     private static async Task<Message> SendDocumentResponseAsync(string text, ITelegramBotClient botClient,
