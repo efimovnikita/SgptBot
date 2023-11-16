@@ -1052,7 +1052,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         StringBuilder builder = new();
         foreach (SgptBot.Models.Message msg in storeUser.Conversation)
         {
-            builder.Append(msg);
+            builder.Append(msg.Msg);
         }
 
         int tokenCount = GetTokenCount(builder.ToString());
