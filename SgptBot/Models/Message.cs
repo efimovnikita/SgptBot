@@ -8,6 +8,6 @@ public class Message
         Msg = msg;
     }
 
-    public Role Role { get; }
+    public Role Role { get; set; }
     public string Msg { get; set; }
 }
