@@ -33,5 +33,6 @@ public class StoreUser
     public bool VoiceMode { get; set; }
     public ImgQuality ImgQuality { get; set; } = ImgQuality.Standard;
     public ImgStyle ImgStyle { get; set; } = ImgStyle.Natural;
-    public DateTime ActivityTime { get; set; } = new DateTime(2020, 1, 1, 1, 00, 00);
+    public DateTime ActivityTime { get; set; } = new(2020, 1, 1, 1, 00, 00);
+    public bool AnewMode { get; set; }
 }

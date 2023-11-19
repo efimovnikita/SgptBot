@@ -133,12 +133,31 @@ public class UpdateHandler : IUpdateHandler
             "/toggle_voice"          => ToggleVoiceCommand(_botClient, message, cancellationToken),
             "/toggle_img_quality"    => ToggleImgQualityCommand(_botClient, message, cancellationToken),
             "/toggle_img_style"      => ToggleImgStyleCommand(_botClient, message, cancellationToken),
+            "/toggle_anew_mode"      => ToggleAnewMode(_botClient, message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ToggleAnewMode(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (await ValidateUser(storeUser, botClient, message.Chat.Id) == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "Error: User validation failed.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser!.AnewMode = !storeUser.AnewMode;
+        _userRepository.UpdateUser(storeUser);
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            $"Anew mode is: {(storeUser.AnewMode ? "On" : "Off")}",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<string?> GetTextFromDocumentMessage(Message message, ITelegramBotClient client, CancellationToken cancellationToken)
@@ -1054,6 +1073,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"OpenAI API key: `{storeUser.ApiKey}`\n" +
             $"Model: `{(storeUser.Model == Model.Gpt3 ? "GPT-3.5 Turbo" : "GPT-4 Turbo")}`\n" +
             $"Voice mode: `{(storeUser.VoiceMode ? "on" : "off")}`\n" +
+            $"Anew mode: `{(storeUser.AnewMode ? "on" : "off")}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
             $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
             $"Current context window size (number of tokens): `{tokenCount}`\n" +
@@ -1179,7 +1199,10 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         storeUser.Conversation.Add(new Models.Message(Role.User, messageText));
         storeUser.Conversation.Add(new Models.Message(Role.Ai, response));
 
-        _userRepository.UpdateUser(storeUser);
+        if (storeUser.AnewMode == false)
+        {
+            _userRepository.UpdateUser(storeUser);
+        }
 
         if (storeUser.VoiceMode)
         {
@@ -1376,6 +1399,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/toggle_voice - enable/disable voice mode\n" +
                        "/toggle_img_quality - switch between standard or HD image quality\n" +
                        "/toggle_img_style - switch between vivid or natural image style\n" +
+                       "/toggle_anew_mode - switch on or off 'anew' mode. With this mode you can start each conversation from the beginning without relying on previous history\n" +
                        "/image - generate an image with help of DALL·E 3\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
