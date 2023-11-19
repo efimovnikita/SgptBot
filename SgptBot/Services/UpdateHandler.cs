@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Humanizer;
 using Microsoft.DeepDev;
@@ -1321,42 +1320,23 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     {
         try
         {
-            var requestData = new { Text = text, Token = token };
+            OpenAiApi api = new(token);
 
-            JsonSerializerOptions jsonOptions = new()
+            SpeechTtsResult? ttsResult = await api.Audio.CreateSpeechAsync(new SpeechRequest
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
-            
-            string jsonData = System.Text.Json.JsonSerializer.Serialize(requestData, jsonOptions);
-            
-            HttpClientHandler httpClientHandler = new()
-            {
-                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-            };
+                Input = text,
+                Model = OpenAiNg.Models.Model.TTS_1_HD,
+                Voice = SpeechVoice.Nova,
+                ResponseFormat = SpeechResponseFormat.Mp3,
+            });
 
-            using HttpClient client = new(httpClientHandler);
+            if (ttsResult == null) return "";
 
-            client.Timeout = TimeSpan.FromMinutes(2);
-
-            HttpContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-            HttpResponseMessage response = await client.PostAsync(_appSettings.TtsApiUrl, content);
-            response.EnsureSuccessStatusCode();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return "";
-            }
-
-            string fileName = Path.GetRandomFileName() + ".mp3"; 
-            string audioFilePath = Path.Combine(Path.GetTempPath(), fileName);
-
-            await using FileStream fileStream = new(audioFilePath, FileMode.Create, FileAccess.Write);
-            await response.Content.CopyToAsync(fileStream);
-
-            return System.IO.File.Exists(audioFilePath) ? audioFilePath : "";
+            string path = Path.Combine(Path.GetTempPath(),
+                Path.ChangeExtension(Path.GetTempFileName(), "mp3"));
+            await ttsResult.SaveAndDispose(path);
+                
+            return System.IO.File.Exists(path) ? path : "";
         }
         catch (Exception e)
         {
