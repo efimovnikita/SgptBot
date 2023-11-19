@@ -1,103 +1,66 @@
-using System.Security.Cryptography;
-using System.Text;
-using LiteDB;
+using MongoDB.Driver;
 
 namespace SgptBot.Models;
 
-public class UserRepository
+public class UserRepository : IUserRepository
 {
-    private readonly string _name;
-    private readonly string _folder;
-    private readonly string _password;
+    private readonly IMongoDatabase _database;
 
-    public UserRepository(string name, string folder, string password)
+    public UserRepository(string dbAdmin, string dbPassword, string dbHost, string dbPort, string dbDatabase)
     {
-        _name = name;
-        _folder = folder;
-        _password = password;
+        string connectionString = $"mongodb://{dbAdmin}:{dbPassword}@{dbHost}:{dbPort}";
+
+        MongoClient client = new(connectionString);
+        _database = client.GetDatabase(dbDatabase);
     }
 
     public StoreUser GetUserOrCreate(long id, string firstName, string lastName, string userName, bool isAdministrator)
     {
-        // Ensure the directory exists. If doesn't, this function will create it.
-        Directory.CreateDirectory(_folder);
-        
-        using var db = new LiteDatabase(
-            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
-            {
-                Connection = ConnectionType.Direct,
-            });
-        var users = db.GetCollection<StoreUser>("Users");
+        IMongoCollection<StoreUser>? usersCollection = _database.GetCollection<StoreUser>("Users");
 
-        var user = users.FindById(id);
-        if (user != null) return user;
+        FilterDefinition<StoreUser>? filter = Builders<StoreUser>.Filter.Eq("_id", id);
+
+        StoreUser? user = usersCollection.Find(filter).FirstOrDefault();
+        if (user != null)
+        {
+            return user;
+        }
+
         user = new StoreUser(id, firstName, lastName, userName, isAdministrator);
-        users.Insert(user);
+        usersCollection.InsertOne(user);
 
         return user;
     }
 
     public bool UpdateUser(StoreUser updateUser)
     {
-        // Ensure the directory exists. If doesn't, this function will create it.
-        Directory.CreateDirectory(_folder);
-        
-        using var db = new LiteDatabase(
-            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
-            {
-                Connection = ConnectionType.Direct,
-            });
-        var users = db.GetCollection<StoreUser>("Users");
-
-        updateUser.ActivityTime = DateTime.Now;
-        
-        return users.Update(updateUser);
-    }
+        IMongoCollection<StoreUser> usersCollection = _database.GetCollection<StoreUser>("Users");
     
+        updateUser.ActivityTime = DateTime.UtcNow;
+
+        FilterDefinition<StoreUser>? filter = Builders<StoreUser>.Filter.Eq("_id", updateUser.Id);
+    
+        ReplaceOptions replaceOptions = new() { IsUpsert = false };
+        ReplaceOneResult result = usersCollection.ReplaceOne(filter, updateUser, replaceOptions);
+
+        return result.ModifiedCount > 0;
+    }
+
     public StoreUser[] GetAllUsers()
     {
-        // Ensure the directory exists. If doesn't, this function will create it.
-        Directory.CreateDirectory(_folder);
-        
-        using var db = new LiteDatabase(
-            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
-            {
-                Connection = ConnectionType.Direct,
-            });
-        var users = db.GetCollection<StoreUser>("Users");
+        IMongoCollection<StoreUser>? usersCollection = _database.GetCollection<StoreUser>("Users");
+        IFindFluent<StoreUser, StoreUser>? usersCursor = usersCollection.Find(Builders<StoreUser>.Filter.Empty);
+        StoreUser[] usersArray = usersCursor.ToList().ToArray();
 
-        return users.FindAll().ToArray();
+        return usersArray;
     }
-    
+
     public StoreUser? GetUserById(long id)
     {
-        // Ensure the directory exists. If doesn't, this function will create it.
-        Directory.CreateDirectory(_folder);
-        
-        using var db = new LiteDatabase(
-            new ConnectionString($"Filename={Path.Combine(_folder, _name)};Password={GetSha256Hash(_password)}")
-            {
-                Connection = ConnectionType.Direct,
-            });
-        var users = db.GetCollection<StoreUser>("Users");
+        IMongoCollection<StoreUser>? usersCollection = _database.GetCollection<StoreUser>("Users");
+        FilterDefinition<StoreUser>? filter = Builders<StoreUser>.Filter.Eq("_id", id);
+        StoreUser? user = usersCollection.Find(filter).FirstOrDefault();
 
-        var user = users.FindById(id);
         return user;
-    }
-
-    private static string GetSha256Hash(string inputString)
-    {
-        using (SHA256 sha256Hash = SHA256.Create())
-        {
-            byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(inputString));
-
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                builder.Append(bytes[i].ToString("x2"));
-            }
-
-            return builder.ToString();
-        }
     }
 }

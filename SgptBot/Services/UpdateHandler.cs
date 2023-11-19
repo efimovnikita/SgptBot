@@ -29,11 +29,11 @@ public class UpdateHandler : IUpdateHandler
     private readonly ITelegramBotClient _botClient;
     private readonly ILogger<UpdateHandler> _logger;
     private readonly ApplicationSettings _appSettings;
-    private readonly UserRepository _userRepository;
+    private readonly IUserRepository _userRepository;
     private readonly ITokenizer _tokenizer;
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
-        UserRepository userRepository)
+        IUserRepository userRepository)
     {
         _botClient = botClient;
         _logger = logger;
