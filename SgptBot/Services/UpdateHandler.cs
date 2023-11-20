@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -30,6 +31,7 @@ public class UpdateHandler : IUpdateHandler
     private readonly ApplicationSettings _appSettings;
     private readonly IUserRepository _userRepository;
     private readonly ITokenizer _tokenizer;
+    private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip" };
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         IUserRepository userRepository)
@@ -184,10 +186,10 @@ public class UpdateHandler : IUpdateHandler
             }
 
             string extension = Path.GetExtension(document.FileName);
-            if (extension is not (".md" or ".txt"))
+            if (_allowedExtensions.Contains(extension) == false)
             {
                 await client.SendTextMessageAsync(message.Chat.Id, 
-                    "Bot supports only '*.txt' or '*.md' formats.",
+                    "Bot supports '*.txt', '*.md', '*.zip' or '*.cs' formats.",
                     cancellationToken: cancellationToken);
                 return "";
             }
@@ -212,8 +214,10 @@ public class UpdateHandler : IUpdateHandler
                 return "";
             }
 
-            string text = await System.IO.File.ReadAllTextAsync(fullDocumentFileName, cancellationToken);
-            
+            string text = extension == ".zip"
+                ? await GetTextFromFilesInsideZipArchive(fullDocumentFileName, cancellationToken)
+                : await System.IO.File.ReadAllTextAsync(fullDocumentFileName, cancellationToken);
+
             if (String.IsNullOrEmpty(message.Caption) == false)
             {
                 text += $"\n{message.Caption}";
@@ -225,6 +229,80 @@ public class UpdateHandler : IUpdateHandler
         {
             _logger.LogWarning("[{MethodName}] {Error}", nameof(GetTextFromDocumentMessage), e.Message);
             return "";
+        }
+    }
+    
+    public async Task<string> GetTextFromFilesInsideZipArchive(string fullDocumentFileName, CancellationToken cancellationToken)
+    {
+        (List<string> extractedFiles, string errorMsg) = UnzipToTempFolder(fullDocumentFileName);
+        if (String.IsNullOrEmpty(errorMsg))
+        {
+            return await GetTextFromExtractedFiles(extractedFiles, cancellationToken);
+        }
+
+        _logger.LogWarning("[{MethodName}] {Error}", nameof(GetTextFromFilesInsideZipArchive), errorMsg);
+        return "";
+    }
+    
+    private async Task<string> GetTextFromExtractedFiles(List<string> extractedFiles, CancellationToken cancellationToken)
+    {
+        string[] allowedPaths = extractedFiles.Where(p =>
+                _allowedExtensions.Contains(Path.GetExtension(p).ToLowerInvariant()))
+            .ToArray();
+
+        StringBuilder builder = new();
+        foreach (string allowedPath in allowedPaths)
+        {
+            builder.AppendLine(await System.IO.File.ReadAllTextAsync(allowedPath, cancellationToken));
+        }
+
+        return builder.ToString();
+    }
+    
+    private (List<string>, string) UnzipToTempFolder(string zipFilePath)
+    {
+        if (!System.IO.File.Exists(zipFilePath))
+        {
+            return (Array.Empty<string>().ToList(), "Zip file does not exist: " + zipFilePath);
+        }
+
+        string tempFolder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempFolder);
+
+        List<string> extractedFiles = new();
+        
+        try
+        {
+            using (ZipArchive archive = ZipFile.OpenRead(zipFilePath))
+            {
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    string destinationPath = Path.Combine(tempFolder, entry.FullName);
+                    entry.ExtractToFile(destinationPath, overwrite: true); 
+                    extractedFiles.Add(destinationPath);
+                }
+            }
+
+            return (extractedFiles, "");
+        }
+        catch (Exception ex)
+        {
+            // Cleanup if there was an error
+            TryDeleteDirectory(tempFolder);
+            // Return an error message along with an empty list of files
+            return (new List<string>(), ex.Message);
+        }
+    }
+
+    private void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            Directory.Delete(path, true);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("[{MethodName}] {Error}", nameof(TryDeleteDirectory), e.Message);
         }
     }
 
