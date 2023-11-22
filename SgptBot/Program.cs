@@ -54,6 +54,12 @@ IHost host = Host.CreateDefaultBuilder(args)
         {
             throw new ArgumentNullException(nameof(ttsApi), "Environment variable TTS is not set.");
         }
+        
+        string? textFromYoutubeApi = Environment.GetEnvironmentVariable("TFYAPI");
+        if (String.IsNullOrEmpty(textFromYoutubeApi))
+        {
+            throw new ArgumentNullException(nameof(textFromYoutubeApi), "Environment variable TFYAPI is not set.");
+        }
 
         services.AddHttpClient("telegram_bot_client")
             .AddTypedClient<ITelegramBotClient>((httpClient, _) =>
@@ -63,9 +69,17 @@ IHost host = Host.CreateDefaultBuilder(args)
             });
         
         services.AddSingleton(new ApplicationSettings(Int32.Parse(adminId), ttsApi));
-        services.AddSingleton<IUserRepository>(_ =>
+        services.AddSingleton<IUserRepository>(_ => new UserRepository(dbAdmin, dbPassword, dbHost, dbPort, dbDatabase));
+        
+        // Register the YoutubeTextProcessorMiddleware with a custom HttpClient
+        services.AddSingleton<IYoutubeTextProcessor>(_ =>
         {
-            return new UserRepository(dbAdmin, dbPassword, dbHost, dbPort, dbDatabase);
+            HttpClientHandler httpClientHandler = new()
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+            HttpClient httpClient = new(httpClientHandler);
+            return new YoutubeTextProcessorMiddleware(httpClient, textFromYoutubeApi);
         });
         
         services.AddScoped<UpdateHandler>();

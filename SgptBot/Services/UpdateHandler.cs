@@ -30,16 +30,18 @@ public class UpdateHandler : IUpdateHandler
     private readonly ILogger<UpdateHandler> _logger;
     private readonly ApplicationSettings _appSettings;
     private readonly IUserRepository _userRepository;
+    private readonly IYoutubeTextProcessor _youtubeTextProcessor;
     private readonly ITokenizer _tokenizer;
     private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip" };
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
-        IUserRepository userRepository)
+        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor)
     {
         _botClient = botClient;
         _logger = logger;
         _appSettings = appSettings;
         _userRepository = userRepository;
+        _youtubeTextProcessor = youtubeTextProcessor;
         _tokenizer = TokenizerBuilder.CreateByModelNameAsync("gpt-4").Result;
     }
 
@@ -1240,6 +1242,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             chatMessages.Add(new ChatMessage(msg.Role == Role.Ai ? ChatMessageRole.Assistant : ChatMessageRole.User, msg.Msg));
         }
+
+        messageText = await ProcessYoutubeUrlIfPresent(messageText, botClient, message.Chat.Id, storeUser, cancellationToken);
         
         chatMessages.Add(new ChatMessage(ChatMessageRole.User, messageText));
 
@@ -1301,6 +1305,21 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return await SendBotResponseDependingOnMsgLength(response, botClient, message.Chat.Id, storeUser.Id, cancellationToken, message.MessageId, ParseMode.Markdown);
     }
 
+    private async Task<string> ProcessYoutubeUrlIfPresent(string messageText,
+        ITelegramBotClient botClient, long chatId, StoreUser storeUser,
+        CancellationToken cancellationToken)
+    {
+        string transcriptFromLink = await _youtubeTextProcessor.ProcessTextAsync(messageText, storeUser.ApiKey);
+        if (messageText == transcriptFromLink)
+        {
+            return messageText;
+        }
+
+        await SendDocumentResponseAsync(transcriptFromLink, botClient, chatId, storeUser.Id,
+            cancellationToken, "This is your transcript \ud83d\udc46");
+        return $"The full transcript from the youtube video:\n{transcriptFromLink}\nJust ask me - what I want to do next with this transcript.";
+    }
+
     private static Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
         long chatId,
         long userId, CancellationToken cancellationToken, int? replyMsgId = null, ParseMode? parseMode = null)
@@ -1324,7 +1343,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     private static async Task<Message> SendDocumentResponseAsync(string text, ITelegramBotClient botClient,
         long chatId,
         long userId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? caption = "Your answer was too long for sending through telegram. Here is the file with your answer.")
     {
         string filePath = CreateMarkdownFileWithUniqueName(text, userId);
 
@@ -1337,7 +1356,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return await botClient.SendDocumentAsync(
             chatId: chatId,
             document: inputFile,
-            caption: "Your answer was too long for sending through telegram. Here is the file with your answer.", 
+            caption: caption, 
             cancellationToken: cancellationToken);
     }
 
