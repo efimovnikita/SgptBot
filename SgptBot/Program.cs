@@ -71,7 +71,6 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(new ApplicationSettings(Int32.Parse(adminId), ttsApi));
         services.AddSingleton<IUserRepository>(_ => new UserRepository(dbAdmin, dbPassword, dbHost, dbPort, dbDatabase));
         
-        // Register the YoutubeTextProcessorMiddleware with a custom HttpClient
         services.AddSingleton<IYoutubeTextProcessor>(_ =>
         {
             HttpClientHandler httpClientHandler = new()
@@ -79,6 +78,7 @@ IHost host = Host.CreateDefaultBuilder(args)
                 ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
             };
             HttpClient httpClient = new(httpClientHandler);
+            httpClient.Timeout = TimeSpan.FromMinutes(5);
             return new YoutubeTextProcessorMiddleware(httpClient, textFromYoutubeApi);
         });
         
