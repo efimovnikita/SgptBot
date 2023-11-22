@@ -1317,7 +1317,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         await SendDocumentResponseAsync(transcriptFromLink, botClient, chatId, storeUser.Id,
             cancellationToken, "This is your transcript \ud83d\udc46");
-        return $"The full transcript from the youtube video:\n{transcriptFromLink}\nJust ask me - what I want to do next with this transcript.";
+        return $"The full transcript from the youtube video:\n{transcriptFromLink}\nI want to ask you about this transcript... Wait for my question. Just say - 'Ask me about this transcript...'";
     }
 
     private static Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
