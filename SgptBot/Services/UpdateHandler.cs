@@ -1704,15 +1704,14 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
     }
 
-    private StoreUser? GetStoreUser(User? messageFrom)
+    private StoreUser? GetStoreUser(User? user)
     {
-        var user = messageFrom;
         if (user == null)
         {
             return null;
         }
 
-        var storeUser = _userRepository.GetUserOrCreate(user.Id, user.FirstName, user.LastName ?? "", user.Username ?? "",
+        StoreUser storeUser = _userRepository.GetUserOrCreate(user.Id, user.FirstName, user.LastName ?? "", user.Username ?? "",
             user.Id.Equals(_appSettings.AdminId));
         
         return storeUser;
