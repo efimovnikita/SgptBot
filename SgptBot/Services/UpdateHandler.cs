@@ -1310,7 +1310,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         int tokenCount = GetTokenCount(builder.ToString());
         
         return await botClient.SendTextMessageAsync(message.Chat.Id,
-            $"Current conversation was reset. Current context window size: `{tokenCount}` tokens.",
+            $"Current conversation was reset.\nCurrent context window size: `{tokenCount}` tokens.",
             cancellationToken: cancellationToken);
     }
 
