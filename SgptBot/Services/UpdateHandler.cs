@@ -47,7 +47,7 @@ public class UpdateHandler : IUpdateHandler
 
     public async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken cancellationToken)
     {
-        var handler = update switch
+        Task handler = update switch
         {
             { Message: { } message }                       => BotOnMessageReceived(message, client, cancellationToken),
             { EditedMessage: { } message }                 => BotOnMessageReceived(message, client, cancellationToken),
