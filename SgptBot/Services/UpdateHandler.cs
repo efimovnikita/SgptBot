@@ -1530,7 +1530,16 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         long chatId,
         long userId, CancellationToken cancellationToken, int? replyMsgId = null, ParseMode? parseMode = null)
     {
-        if (msg.Length >= MaxMsgLength == false)
+        if (msg.Length >= MaxMsgLength)
+        {
+            return SendDocumentResponseAsync(text: msg,
+                botClient: client,
+                chatId: chatId,
+                userId: userId,
+                cancellationToken: cancellationToken);
+        }
+
+        try
         {
             return client.SendTextMessageAsync(chatId: chatId,
                 text: msg,
@@ -1538,12 +1547,14 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 replyToMessageId: replyMsgId,
                 cancellationToken: cancellationToken);
         }
-
-        return SendDocumentResponseAsync(text: msg,
-            botClient: client,
-            chatId: chatId,
-            userId: userId,
-            cancellationToken: cancellationToken);
+        catch
+        {
+            return client.SendTextMessageAsync(chatId: chatId,
+                text: msg,
+                parseMode: null,
+                replyToMessageId: replyMsgId,
+                cancellationToken: cancellationToken);
+        }
     }
 
     private static async Task<Message> SendDocumentResponseAsync(string text, ITelegramBotClient botClient,
