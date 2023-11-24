@@ -1300,21 +1300,15 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        string? response = "";
+        string? response;
         if (storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4)
         {
-#if RELEASE
             response = await GetResponseFromOpenAiModel(botClient, storeUser, message, messageText, cancellationToken);
-#endif
         }
         else
         {
             response = await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken);
         }
-
-#if DEBUG
-        response = "TEST TEST";
-#endif
         
         if (String.IsNullOrWhiteSpace(response))
         {
@@ -1357,15 +1351,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     {
         string prompt = PreparePromptForClaude(storeUser, messageText);
 
-#if RELEASE
         string response = await PostToClaudeApiAsync(prompt, storeUser.ClaudeApiKey, client, message, storeUser,
             cancellationToken);
         return response;
-#endif
-
-#if DEBUG
-        return "Response from Claude";
-#endif
     }
 
     private static string PreparePromptForClaude(StoreUser storeUser, string messageText)
@@ -1428,7 +1416,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
             if (response.IsSuccessStatusCode)
             {
-                return responseBody;
+                ClaudeApiCompletionResponse? claudeApiCompletionResponse =
+                    JsonConvert.DeserializeObject<ClaudeApiCompletionResponse>(responseBody);
+                return claudeApiCompletionResponse?.Completion ?? String.Empty;
             }
 
             ClaudeApiErrorResponse? apiErrorResponse = JsonConvert.DeserializeObject<ClaudeApiErrorResponse>(responseBody);
@@ -1530,8 +1520,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         long chatId,
         long userId, CancellationToken cancellationToken, int? replyMsgId = null, ParseMode? parseMode = null)
     {
-        _logger.LogDebug("Msg received from the model:\n\n{msg}", msg);
-        
         if (msg.Length >= MaxMsgLength)
         {
             return SendDocumentResponseAsync(text: msg,
