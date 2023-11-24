@@ -114,6 +114,9 @@ public class UpdateHandler : IUpdateHandler
 
         if (String.IsNullOrEmpty(messageText))
         {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                "Your message was empty. Try again.",
+                cancellationToken: cancellationToken);
             _logger.LogWarning("[{MethodName}] Message is empty. Return.", nameof(BotOnMessageReceived));
             return;
         }
