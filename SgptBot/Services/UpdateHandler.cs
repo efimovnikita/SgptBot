@@ -1252,6 +1252,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         int tokenCount = GetTokenCount(builder.ToString());
+        
 #pragma warning disable CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
         string mName = storeUser.Model switch
 #pragma warning restore CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
@@ -1280,17 +1281,17 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> ResetConversationCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
 
-        var messages = storeUser.Conversation.Where(m => m.Role != Role.System).ToArray();
-        foreach (var msg in messages)
+        Models.Message[] messages = storeUser.Conversation.Where(m => m.Role != Role.System).ToArray();
+        foreach (Models.Message msg in messages)
         {
-            var removeStatus = storeUser.Conversation.Remove(msg);
+            bool removeStatus = storeUser.Conversation.Remove(msg);
             if (removeStatus == false)
             {
                 return await botClient.SendTextMessageAsync(message.Chat.Id, "Error while removing the conversation message.",
@@ -1300,7 +1301,16 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         
         _userRepository.UpdateUser(storeUser);
         
-        return await botClient.SendTextMessageAsync(message.Chat.Id, "Current conversation was reset.",
+        StringBuilder builder = new();
+        foreach (SgptBot.Models.Message msg in storeUser.Conversation)
+        {
+            builder.Append(msg.Msg);
+        }
+        
+        int tokenCount = GetTokenCount(builder.ToString());
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            $"Current conversation was reset. Current context window size: `{tokenCount}` tokens.",
             cancellationToken: cancellationToken);
     }
 
