@@ -412,7 +412,6 @@ public class UpdateHandler : IUpdateHandler
         {
             if (String.IsNullOrWhiteSpace(user.ApiKey))
             {
-                // TODO
                 await client.SendTextMessageAsync(chatId, "Your OpenAI API key is not set. Use '/key' command and set key.");
                 return false;
             }
@@ -421,8 +420,7 @@ public class UpdateHandler : IUpdateHandler
         {
             if (String.IsNullOrWhiteSpace(user.ClaudeApiKey))
             {
-                // TODO
-                await client.SendTextMessageAsync(chatId, "Your Claude API key is not set. Use '/key' command and set key.");
+                await client.SendTextMessageAsync(chatId, "Your Claude API key is not set. Use '/key_claude' command and set key.");
                 return false;
             }
         }
