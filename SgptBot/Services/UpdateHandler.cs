@@ -1526,10 +1526,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return $"The full transcript from the youtube video:\n{transcriptFromLink}\nI want to ask you about this transcript... Wait for my question. Just say - 'Ask me about this transcript...'";
     }
 
-    private static Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
+    private Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
         long chatId,
         long userId, CancellationToken cancellationToken, int? replyMsgId = null, ParseMode? parseMode = null)
     {
+        _logger.LogDebug("Msg received from the model:\n\n{msg}", msg);
+        
         if (msg.Length >= MaxMsgLength)
         {
             return SendDocumentResponseAsync(text: msg,
@@ -1547,10 +1549,20 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 replyToMessageId: replyMsgId,
                 cancellationToken: cancellationToken);
         }
-        catch
+        catch (ApiRequestException e)
         {
+            _logger.LogError("[{MethodName}] {Error}", nameof(SendBotResponseDependingOnMsgLength), e.Message);
+
             return client.SendTextMessageAsync(chatId: chatId,
                 text: msg,
+                parseMode: null,
+                replyToMessageId: replyMsgId,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception e)
+        {
+            return client.SendTextMessageAsync(chatId: chatId,
+                text: e.Message,
                 parseMode: null,
                 replyToMessageId: replyMsgId,
                 cancellationToken: cancellationToken);
