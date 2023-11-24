@@ -130,6 +130,7 @@ public class UpdateHandler : IUpdateHandler
             "/info"                  => InfoCommand(_botClient, message, cancellationToken),
             "/model"                 => ModelCommand(_botClient, message, cancellationToken),
             "/context"               => ContextCommand(_botClient, message, cancellationToken),
+            "/contact"               => ContactCommand(_botClient, message, cancellationToken),
             "/reset_context"         => ResetContextCommand(_botClient, message, cancellationToken),
             "/history"               => HistoryCommand(_botClient, message, cancellationToken),
             "/about"                 => AboutCommand(_botClient, message, cancellationToken),
@@ -147,6 +148,47 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ContactCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser is {IsAdministrator: false, IsBlocked: true})
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "You are blocked. Wait for some time and try again.", cancellationToken: cancellationToken);
+        }
+        
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/contact' command you must input the message to admin. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string msg = String.Join(' ', strings.Skip(1));
+        if (String.IsNullOrWhiteSpace(msg))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/contact' command you must input the message to admin. Try again.",
+                cancellationToken: cancellationToken);
+        }
+        
+        await botClient.SendTextMessageAsync(chatId: _appSettings.AdminId,
+            text: $"Message from '{storeUser}':\n\n'{msg}'",
+            cancellationToken: cancellationToken);
+        
+        return await botClient.SendTextMessageAsync(
+            message.Chat.Id, 
+            "Your message was sent to the admin.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> SetKeyClaudeCommand(ITelegramBotClient botClient, Message message,
@@ -1690,6 +1732,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/key_claude - set an Anthropic Claude API key\n" +
                        "/model - choose the GPT model to work with\n" +
                        "/context - set the context message\n" +
+                       "/contact - contact the bot admin\n" +
                        "/append - append text to your last message\n" +
                        "/reset_context - reset the context message\n" +
                        "/history - view the conversation history\n" +

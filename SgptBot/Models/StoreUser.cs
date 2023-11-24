@@ -1,4 +1,5 @@
 using LiteDB;
+using Newtonsoft.Json;
 
 namespace SgptBot.Models;
 
@@ -36,4 +37,9 @@ public class StoreUser
     public DateTime ActivityTime { get; set; } = new(2020, 1, 1, 1, 00, 00);
     public bool AnewMode { get; set; }
     public string ClaudeApiKey { get; set; }
+
+    public override string ToString()
+    {
+        return $"{nameof(Id)}: {Id}, {nameof(FirstName)}: {FirstName}, {nameof(LastName)}: {LastName}, {nameof(UserName)}: {UserName}";
+    }
 }
