@@ -122,6 +122,7 @@ public class UpdateHandler : IUpdateHandler
         {
             "/usage"                 => UsageCommand(_botClient, message, cancellationToken),
             "/key"                   => SetKeyCommand(_botClient, message, cancellationToken),
+            "/key_claude"            => SetKeyClaudeCommand(_botClient, message, cancellationToken),
             "/reset"                 => ResetConversationCommand(_botClient, message, cancellationToken),
             "/info"                  => InfoCommand(_botClient, message, cancellationToken),
             "/model"                 => ModelCommand(_botClient, message, cancellationToken),
@@ -143,6 +144,39 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> SetKeyClaudeCommand(ITelegramBotClient botClient, Message message,
+        CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_claude' command you must input your Anthropic Claude API key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string apiKey = strings[1];
+        if (String.IsNullOrWhiteSpace(apiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_claude' command you must input your Anthropic Claude API key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.ClaudeApiKey = apiKey;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Anthropic Claude API key was set.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ToggleAnewMode(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -373,11 +407,24 @@ public class UpdateHandler : IUpdateHandler
             await client.SendTextMessageAsync(chatId, "Error getting the user from the store.");
             return false;
         }
-        
-        if (String.IsNullOrWhiteSpace(user.ApiKey))
+
+        if (user.Model is Model.Gpt3 or Model.Gpt4)
         {
-            await client.SendTextMessageAsync(chatId, "Your api key is not set. Use '/key' command and set key.");
-            return false;
+            if (String.IsNullOrWhiteSpace(user.ApiKey))
+            {
+                // TODO
+                await client.SendTextMessageAsync(chatId, "Your OpenAI API key is not set. Use '/key' command and set key.");
+                return false;
+            }
+        }
+        else
+        {
+            if (String.IsNullOrWhiteSpace(user.ClaudeApiKey))
+            {
+                // TODO
+                await client.SendTextMessageAsync(chatId, "Your Claude API key is not set. Use '/key' command and set key.");
+                return false;
+            }
         }
 
         if (user is {IsAdministrator: false, IsBlocked: true})
@@ -1060,44 +1107,51 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> ModelCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
         
-        var strings = message.Text!.Split(' ');
-        if (strings.Length < 2)
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length >= 2)
         {
-            // Defining buttons
-            InlineKeyboardButton gpt3Button = new("GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
-            InlineKeyboardButton gpt4Button = new("GPT-4 Turbo") { CallbackData = "/model gpt4"};
-     
-            InlineKeyboardButton[] row1 = { gpt3Button, gpt4Button };
-            
-            // Buttons by rows
-            InlineKeyboardButton[][] buttons = { row1 };
-    
-            // Keyboard
-            InlineKeyboardMarkup inlineKeyboard = new(buttons);
-            
-            return await botClient.SendTextMessageAsync(message.Chat.Id,
-                @"Select the model that you want to use.
-
-1) GPT-3.5 models can understand and generate natural language or code. Our most capable and cost effective model in the GPT-3.5 family.
-2) GPT-4 is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any of our previous models, thanks to its broader general knowledge and advanced reasoning capabilities.",
-                replyMarkup: inlineKeyboard,
-                cancellationToken: cancellationToken);
+            return await SetSelectedModel(botClient, message.Chat.Id, strings, storeUser, cancellationToken);
         }
 
-        return await SetSelectedModel(botClient, message.Chat.Id, strings, storeUser, cancellationToken);
+        // Defining buttons
+        InlineKeyboardButton gpt3Button = new("GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
+        InlineKeyboardButton gpt4Button = new("GPT-4 Turbo") { CallbackData = "/model gpt4"};
+        InlineKeyboardButton claudeButton = new("Claude 2.1") { CallbackData = "/model claude21"};
+     
+        InlineKeyboardButton[] row1 = { gpt3Button };
+        InlineKeyboardButton[] row2 = { gpt4Button };
+        InlineKeyboardButton[] row3 = { claudeButton };
+            
+        // Buttons by rows
+        InlineKeyboardButton[][] buttons = { row1, row2, row3 };
+    
+        // Keyboard
+        InlineKeyboardMarkup inlineKeyboard = new(buttons);
+            
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            """
+            Select the model that you want to use.
+
+            1) GPT-3.5 models can understand and generate natural language or code. Our most capable and cost effective model in the GPT-3.5 family.
+            2) GPT-4 is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any of our previous models, thanks to its broader general knowledge and advanced reasoning capabilities.
+            3) Claude 2 is a language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages.
+            """,
+            replyMarkup: inlineKeyboard,
+            cancellationToken: cancellationToken);
+
     }
 
     private async Task<Message> SetSelectedModel(ITelegramBotClient botClient, long chatId,
         string[] strings, StoreUser storeUser, CancellationToken cancellationToken)
     {
-        var modelName = strings[1];
+        string modelName = strings[1];
         if (String.IsNullOrWhiteSpace(modelName))
         {
             return await botClient.SendTextMessageAsync(chatId,
@@ -1105,26 +1159,37 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
         
-        if (modelName.ToLower().Equals("gpt3.5") == false && modelName.ToLower().Equals("gpt4") == false)
+        if (modelName.ToLower().Equals("gpt3.5") == false && modelName.ToLower().Equals("gpt4") == false && 
+            modelName.ToLower().Equals("claude21") == false)
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5' or 'gpt4'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4' or 'claude21'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
-        var selectedModel = modelName.ToLower() switch
+        Model selectedModel = modelName.ToLower() switch
         {
             "gpt3.5" => Model.Gpt3,
             "gpt4" => Model.Gpt4,
+            "claude21" => Model.Claude21,
             _ => Model.Gpt3
         };
 
         storeUser.Model = selectedModel;
         _userRepository.UpdateUser(storeUser);
 
+#pragma warning disable CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
+        string mName = selectedModel switch
+#pragma warning restore CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
+        {
+            Model.Gpt3 => "GPT-3.5 Turbo",
+            Model.Gpt4 => "GPT-4 Turbo",
+            Model.Claude21 => "Claude 2.1",
+        };
+        
         return await botClient.SendTextMessageAsync(
             chatId, 
-            $"Model '{(selectedModel == Model.Gpt3 ? "GPT-3.5 Turbo" : "GPT-4 Turbo")}' was set.",
+            $"Model '{mName}' was set.",
             cancellationToken: cancellationToken);
     }
 
@@ -1144,13 +1209,22 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         int tokenCount = GetTokenCount(builder.ToString());
+#pragma warning disable CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
+        string mName = storeUser.Model switch
+#pragma warning restore CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
+        {
+            Model.Gpt3 => "GPT-3.5 Turbo",
+            Model.Gpt4 => "GPT-4 Turbo",
+            Model.Claude21 => "Claude 2.1",
+        };
 
         return await botClient.SendTextMessageAsync(message.Chat.Id,
             $"First name: `{storeUser.FirstName}`\n" +
             $"Last name: `{storeUser.LastName}`\n" +
             $"Username: `{storeUser.UserName}`\n" +
             $"OpenAI API key: `{storeUser.ApiKey}`\n" +
-            $"Model: `{(storeUser.Model == Model.Gpt3 ? "GPT-3.5 Turbo" : "GPT-4 Turbo")}`\n" +
+            $"Claude API key: `{storeUser.ClaudeApiKey}`\n" +
+            $"Model: `{mName}`\n" +
             $"Voice mode: `{(storeUser.VoiceMode ? "on" : "off")}`\n" +
             $"Anew mode: `{(storeUser.AnewMode ? "on" : "off")}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
@@ -1228,47 +1302,22 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        OpenAiApi api = new(storeUser!.ApiKey);
+        string? response = "";
+        if (storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4)
+        {
+#if RELEASE
+            response = await GetResponseFromOpenAiModel(botClient, storeUser, message, messageText, cancellationToken);
+#endif
+        }
+        else
+        {
+            response = await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken);
+        }
+
+#if DEBUG
+        response = "TEST TEST";
+#endif
         
-        List<ChatMessage> chatMessages = new();
-
-        Models.Message? systemMessage = storeUser.Conversation.FirstOrDefault(m => m.Role == Role.System);
-        if (systemMessage != null && String.IsNullOrWhiteSpace(systemMessage.Msg) == false)
-        {
-            chatMessages.Add(new ChatMessage(ChatMessageRole.System, systemMessage.Msg));
-        }
-
-        foreach (Models.Message msg in storeUser.Conversation.Where(m => m.Role != Role.System))
-        {
-            chatMessages.Add(new ChatMessage(msg.Role == Role.Ai ? ChatMessageRole.Assistant : ChatMessageRole.User, msg.Msg));
-        }
-
-        messageText = await ProcessYoutubeUrlIfPresent(messageText, botClient, message.Chat.Id, storeUser, cancellationToken);
-        
-        chatMessages.Add(new ChatMessage(ChatMessageRole.User, messageText));
-
-        ChatRequest request = new()
-        {
-            Model = storeUser.Model == Model.Gpt3 ? OpenAiNg.Models.Model.ChatGPTTurbo1106 : OpenAiNg.Models.Model.GPT4_1106_Preview,
-            Messages = chatMessages.ToArray()
-        };
-
-        ChatResult? result;
-        try
-        {
-            result = await api.Chat.CreateChatCompletionAsync(request);
-        }
-        catch (Exception e)
-        {
-            return await SendBotResponseDependingOnMsgLength(msg: e.Message,
-                client: botClient,
-                chatId: message.Chat.Id,
-                userId: storeUser.Id,
-                cancellationToken: cancellationToken, 
-                replyMsgId: message.MessageId);
-        }
-
-        string? response = result.Choices?[0].Message?.Content;
         if (String.IsNullOrWhiteSpace(response))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Response from model is empty. Try again.",
@@ -1303,6 +1352,165 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
         
         return await SendBotResponseDependingOnMsgLength(response, botClient, message.Chat.Id, storeUser.Id, cancellationToken, message.MessageId, ParseMode.Markdown);
+    }
+
+    private async Task<string> GetResponseFromAnthropicModel(ITelegramBotClient client, StoreUser storeUser,
+        Message message, string messageText, CancellationToken cancellationToken)
+    {
+        string prompt = PreparePromptForClaude(storeUser, messageText);
+
+#if RELEASE
+        string response = await PostToClaudeApiAsync(prompt, storeUser.ClaudeApiKey, client, message, storeUser,
+            cancellationToken);
+        return response;
+#endif
+
+#if DEBUG
+        return "Response from Claude";
+#endif
+    }
+
+    private static string PreparePromptForClaude(StoreUser storeUser, string messageText)
+    {
+        StringBuilder builder = new();
+
+        SgptBot.Models.Message? systemMsg = storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System);
+        if (systemMsg != null)
+        {
+            builder.AppendLine(systemMsg.Msg);
+            builder.AppendLine();
+        }
+
+        foreach (SgptBot.Models.Message msg in storeUser.Conversation.Where(msg => msg.Role != Role.System).ToArray())
+        {
+            if (msg.Role == Role.User)
+            {
+                builder.AppendLine($"Human: {msg.Msg}");
+                builder.AppendLine();
+            }
+            else
+            {
+                builder.AppendLine($"Assistant: {msg.Msg}");
+                builder.AppendLine();
+            }
+        }
+
+        builder.AppendLine($"Human: {messageText}");
+        builder.AppendLine();
+        builder.AppendLine("Assistant:");
+
+        string prompt = builder.ToString();
+        return prompt;
+    }
+
+    private async Task<string> PostToClaudeApiAsync(string prompt, string apiKey, ITelegramBotClient client,
+        Message message, StoreUser storeUser, CancellationToken cancellationToken)
+    {
+        using HttpClient httpClient = new();
+        httpClient.Timeout = TimeSpan.FromSeconds(240);
+
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+        httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
+
+        var content = new
+        {
+            model = "claude-2.1",
+            prompt,
+            max_tokens_to_sample = 4000
+        };
+
+        using StringContent jsonContent = new(JsonConvert.SerializeObject(content), Encoding.UTF8, "application/json");
+
+        try
+        {
+            HttpResponseMessage response = await httpClient.PostAsync("https://api.anthropic.com/v1/complete",
+                jsonContent, cancellationToken);
+            string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return responseBody;
+            }
+
+            ClaudeApiErrorResponse? apiErrorResponse = JsonConvert.DeserializeObject<ClaudeApiErrorResponse>(responseBody);
+
+            if (apiErrorResponse != null)
+            {
+                await SendBotResponseDependingOnMsgLength(
+                    msg: $"API error: {apiErrorResponse.Error.Type} - {apiErrorResponse.Error.Message}",
+                    client: client,
+                    chatId: message.Chat.Id,
+                    userId: storeUser.Id,
+                    cancellationToken: cancellationToken,
+                    replyMsgId: message.MessageId);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("[{MethodName}] {Error}", nameof(PostToClaudeApiAsync), e.Message);
+
+            await SendBotResponseDependingOnMsgLength(msg: e.Message,
+                client: client,
+                chatId: message.Chat.Id,
+                userId: storeUser.Id,
+                cancellationToken: cancellationToken,
+                replyMsgId: message.MessageId);
+        }
+
+        return "";
+    }
+    
+    private async Task<string?> GetResponseFromOpenAiModel(ITelegramBotClient client,
+        StoreUser storeUser,
+        Message message,
+        string messageText,
+        CancellationToken cancellationToken)
+    {
+        OpenAiApi api = new(storeUser.ApiKey);
+        
+        List<ChatMessage> chatMessages = [];
+
+        Models.Message? systemMessage = storeUser.Conversation.FirstOrDefault(m => m.Role == Role.System);
+        if (systemMessage != null && String.IsNullOrWhiteSpace(systemMessage.Msg) == false)
+        {
+            chatMessages.Add(new ChatMessage(ChatMessageRole.System, systemMessage.Msg));
+        }
+
+        foreach (Models.Message msg in storeUser.Conversation.Where(m => m.Role != Role.System))
+        {
+            chatMessages.Add(new ChatMessage(msg.Role == Role.Ai ? ChatMessageRole.Assistant : ChatMessageRole.User, msg.Msg));
+        }
+
+        messageText = await ProcessYoutubeUrlIfPresent(messageText, client, message.Chat.Id, storeUser, cancellationToken);
+        
+        chatMessages.Add(new ChatMessage(ChatMessageRole.User, messageText));
+
+        ChatRequest request = new()
+        {
+            Model = storeUser.Model == Model.Gpt3 ? OpenAiNg.Models.Model.ChatGPTTurbo1106 : OpenAiNg.Models.Model.GPT4_1106_Preview,
+            Messages = chatMessages.ToArray()
+        };
+
+        ChatResult? result;
+        try
+        {
+            result = await api.Chat.CreateChatCompletionAsync(request);
+        }
+        catch (Exception e)
+        {
+            await SendBotResponseDependingOnMsgLength(msg: e.Message,
+                client: client,
+                chatId: message.Chat.Id,
+                userId: storeUser.Id,
+                cancellationToken: cancellationToken, 
+                replyMsgId: message.MessageId);
+
+            return "";
+        }
+
+        string? response = result.Choices?[0].Message?.Content;
+        return response;
     }
 
     private async Task<string> ProcessYoutubeUrlIfPresent(string messageText,
@@ -1467,6 +1675,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         string usage = "Usage:\n" +
                        "/key - set an OpenAI API key\n" +
+                       "/key_claude - set an Anthropic Claude API key\n" +
                        "/model - choose the GPT model to work with\n" +
                        "/context - set the context message\n" +
                        "/append - append text to your last message\n" +

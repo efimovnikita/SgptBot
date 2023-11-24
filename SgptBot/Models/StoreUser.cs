@@ -35,4 +35,5 @@ public class StoreUser
     public ImgStyle ImgStyle { get; set; } = ImgStyle.Natural;
     public DateTime ActivityTime { get; set; } = new(2020, 1, 1, 1, 00, 00);
     public bool AnewMode { get; set; }
+    public string ClaudeApiKey { get; set; }
 }
