@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.RegularExpressions;
 using Humanizer;
 using Microsoft.DeepDev;
 using Microsoft.Extensions.Logging;
@@ -1035,11 +1034,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         StoreUser[] users = _userRepository.GetAllUsers();
         StoreUser[] activeUsers = users
-            .Where(user => String.IsNullOrWhiteSpace(user.ApiKey) == false && IsMatchSkPattern(user.ApiKey))
+            .Where(user => String.IsNullOrWhiteSpace(user.ApiKey) == false ||
+                           String.IsNullOrWhiteSpace(user.ClaudeApiKey) == false)
             .OrderByDescending(user => user.ActivityTime)
             .ToArray();
         
-        if (activeUsers.Any() == false)
+        if (activeUsers.Length == 0)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, 
                 "Active users not found.",
@@ -1067,8 +1067,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         string humanizedTimeSinceLastActivity = timeSinceLastActivity.Humanize();
         return humanizedTimeSinceLastActivity;
     }
-
-    private static bool IsMatchSkPattern(string input) => Regex.IsMatch(input, @"^sk-[A-Za-z0-9]+$");
 
     private async Task<Message> AboutCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
