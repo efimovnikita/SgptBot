@@ -1164,9 +1164,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         // Defining buttons
-        InlineKeyboardButton gpt3Button = new("GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
-        InlineKeyboardButton gpt4Button = new("GPT-4 Turbo") { CallbackData = "/model gpt4"};
-        InlineKeyboardButton claudeButton = new("Claude 2.1") { CallbackData = "/model claude21"};
+        InlineKeyboardButton gpt3Button = new("OpenAI GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
+        InlineKeyboardButton gpt4Button = new("OpenAI GPT-4 Turbo") { CallbackData = "/model gpt4"};
+        InlineKeyboardButton claudeButton = new("Anthropic Claude 2.1") { CallbackData = "/model claude21"};
      
         InlineKeyboardButton[] row1 = { gpt3Button };
         InlineKeyboardButton[] row2 = { gpt4Button };
