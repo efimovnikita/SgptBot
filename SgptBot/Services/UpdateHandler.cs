@@ -1075,11 +1075,68 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             cancellationToken: cancellationToken);
     }
 
-    private async Task<Message> HistoryCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    private async Task<Message> HistoryCommand(ITelegramBotClient client, Message message, CancellationToken cancellationToken)
     {
-        return await botClient.SendTextMessageAsync(message.Chat.Id,
-            "History feature is not implemented yet.",
-            cancellationToken: cancellationToken);
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser.History.Count == 0)
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id,
+                "History is empty.",
+                cancellationToken: cancellationToken);
+        }
+        
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id,
+                "After the '/history' command you must input the desired date. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string datePrompt = String.Join(' ', strings.Skip(1));
+        if (String.IsNullOrWhiteSpace(datePrompt))
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id,
+                "After the '/history' command you must input the desired date. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        bool parseResult = DateOnly.TryParse(datePrompt, out DateOnly date);
+        if (parseResult == false)
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id,
+                "I do not understand your date format. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        SgptBot.Models.Message[] messagesFromHistory = storeUser.History.Where(msg => msg.Date == date).ToArray();
+        if (messagesFromHistory.Length == 0)
+        {
+            return await client.SendTextMessageAsync(message.Chat.Id,
+                $"I don't have history for '{date}' date. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        StringBuilder builder = new();
+        foreach (SgptBot.Models.Message msg in messagesFromHistory)
+        {
+            builder.AppendLine($"{msg.Role}:");
+            builder.AppendLine(msg.Msg);
+            builder.AppendLine();
+        }
+        
+        return await SendDocumentResponseAsync(text: builder.ToString(),
+            botClient: client,
+            chatId: message.Chat.Id,
+            userId: storeUser.Id,
+            cancellationToken: cancellationToken,
+            caption: $"This is your history from '{date}' date.");
     }
 
     private async Task<Message> ResetContextCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
