@@ -1077,7 +1077,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             cancellationToken: cancellationToken);
     }
 
-    // ReSharper disable once CognitiveComplexity
     private async Task<Message> HistoryCommand(ITelegramBotClient client, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
@@ -1113,40 +1112,22 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         bool parseResult = DateOnly.TryParse(datePrompt, out DateOnly date);
         if (parseResult == false)
         {
-            const string dontUnderstandMsg = "I do not understand your date format. Try again.";
-            if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+            DateOnly? dateOnly =
+                await TryToCallFuncApiAndGetDate(client, message, storeUser, datePrompt, cancellationToken);
+            if (dateOnly != null)
             {
-                return await client.SendTextMessageAsync(message.Chat.Id,
-                    dontUnderstandMsg,
-                    cancellationToken: cancellationToken);
+                date = (DateOnly) dateOnly;
             }
-
-            GetExtractDateFunctionResult? extractDateFunctionResult =
-                await GetDateFunctionCallResult(storeUser, datePrompt);
-            if (extractDateFunctionResult == null)
+            else
             {
                 return await client.SendTextMessageAsync(message.Chat.Id,
-                    dontUnderstandMsg,
-                    cancellationToken: cancellationToken);
-            }
-
-            if (extractDateFunctionResult.Status == false)
-            {
-                return await client.SendTextMessageAsync(message.Chat.Id,
-                    dontUnderstandMsg,
-                    cancellationToken: cancellationToken);
-            }
-
-            bool tryParseResult = DateOnly.TryParse(extractDateFunctionResult.Date, out date);
-            if (tryParseResult == false)
-            {
-                return await client.SendTextMessageAsync(message.Chat.Id,
-                    dontUnderstandMsg,
+                    "Try '/history' command again.",
                     cancellationToken: cancellationToken);
             }
         }
 
-        SgptBot.Models.Message[] messagesFromHistory = storeUser.History.Where(msg => msg.Date == date).ToArray();
+        SgptBot.Models.Message[] messagesFromHistory = storeUser.History
+            .Where(msg => msg.Date == date).ToArray();
         if (messagesFromHistory.Length == 0)
         {
             return await client.SendTextMessageAsync(message.Chat.Id,
@@ -1160,6 +1141,48 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             userId: storeUser.Id,
             cancellationToken: cancellationToken,
             caption: $"This is your history from '{date}' date.");
+    }
+
+    private async Task<DateOnly?> TryToCallFuncApiAndGetDate(ITelegramBotClient client, Message message,
+        StoreUser storeUser, string datePrompt, CancellationToken cancellationToken)
+    {
+        const string dontUnderstandMsg = "I do not understand your date format.";
+        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+        {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                dontUnderstandMsg,
+                cancellationToken: cancellationToken);
+            return null;
+        }
+
+        GetExtractDateFunctionResult? extractDateFunctionResult =
+            await GetDateFunctionCallResult(storeUser, datePrompt);
+        if (extractDateFunctionResult == null)
+        {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                dontUnderstandMsg,
+                cancellationToken: cancellationToken);
+            return null;
+        }
+
+        if (extractDateFunctionResult.Status == false)
+        {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                dontUnderstandMsg,
+                cancellationToken: cancellationToken);
+            return null;
+        }
+
+        bool tryParseResult = DateOnly.TryParse(extractDateFunctionResult.Date, out DateOnly parsedDate);
+        if (tryParseResult == false)
+        {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                dontUnderstandMsg,
+                cancellationToken: cancellationToken);
+            return null;
+        }
+
+        return parsedDate;
     }
 
     private static string GetHistory(Models.Message[] messagesFromHistory)
