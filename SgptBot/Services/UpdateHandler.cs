@@ -34,6 +34,7 @@ public class UpdateHandler : IUpdateHandler
     private readonly ITokenizer _tokenizer;
     private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip" };
 
+    // ReSharper disable once ConvertToPrimaryConstructor
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor)
     {
@@ -1076,6 +1077,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             cancellationToken: cancellationToken);
     }
 
+    // ReSharper disable once CognitiveComplexity
     private async Task<Message> HistoryCommand(ITelegramBotClient client, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
@@ -1170,8 +1172,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             builder.AppendLine();
         }
 
-        string history = builder.ToString();
-        return history;
+        return builder.ToString();
     }
 
     private async Task<GetExtractDateFunctionResult?> GetDateFunctionCallResult(StoreUser storeUser, string datePrompt)
