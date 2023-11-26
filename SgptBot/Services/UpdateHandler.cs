@@ -9,6 +9,7 @@ using Newtonsoft.Json.Linq;
 using OpenAiNg;
 using OpenAiNg.Audio;
 using OpenAiNg.Chat;
+using OpenAiNg.ChatFunctions;
 using OpenAiNg.Images;
 using SgptBot.Models;
 using Telegram.Bot;
@@ -1110,9 +1111,37 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         bool parseResult = DateOnly.TryParse(datePrompt, out DateOnly date);
         if (parseResult == false)
         {
-            return await client.SendTextMessageAsync(message.Chat.Id,
-                "I do not understand your date format. Try again.",
-                cancellationToken: cancellationToken);
+            const string dontUnderstandMsg = "I do not understand your date format. Try again.";
+            if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+            {
+                return await client.SendTextMessageAsync(message.Chat.Id,
+                    dontUnderstandMsg,
+                    cancellationToken: cancellationToken);
+            }
+
+            GetExtractDateFunctionResult? extractDateFunctionResult =
+                await GetDateFunctionCallResult(storeUser, datePrompt);
+            if (extractDateFunctionResult == null)
+            {
+                return await client.SendTextMessageAsync(message.Chat.Id,
+                    dontUnderstandMsg,
+                    cancellationToken: cancellationToken);
+            }
+
+            if (extractDateFunctionResult.Status == false)
+            {
+                return await client.SendTextMessageAsync(message.Chat.Id,
+                    dontUnderstandMsg,
+                    cancellationToken: cancellationToken);
+            }
+
+            bool tryParseResult = DateOnly.TryParse(extractDateFunctionResult.Date, out date);
+            if (tryParseResult == false)
+            {
+                return await client.SendTextMessageAsync(message.Chat.Id,
+                    dontUnderstandMsg,
+                    cancellationToken: cancellationToken);
+            }
         }
 
         SgptBot.Models.Message[] messagesFromHistory = storeUser.History.Where(msg => msg.Date == date).ToArray();
@@ -1123,6 +1152,16 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
+        return await SendDocumentResponseAsync(text: GetHistory(messagesFromHistory),
+            botClient: client,
+            chatId: message.Chat.Id,
+            userId: storeUser.Id,
+            cancellationToken: cancellationToken,
+            caption: $"This is your history from '{date}' date.");
+    }
+
+    private static string GetHistory(Models.Message[] messagesFromHistory)
+    {
         StringBuilder builder = new();
         foreach (SgptBot.Models.Message msg in messagesFromHistory)
         {
@@ -1130,13 +1169,87 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             builder.AppendLine(msg.Msg);
             builder.AppendLine();
         }
-        
-        return await SendDocumentResponseAsync(text: builder.ToString(),
-            botClient: client,
-            chatId: message.Chat.Id,
-            userId: storeUser.Id,
-            cancellationToken: cancellationToken,
-            caption: $"This is your history from '{date}' date.");
+
+        string history = builder.ToString();
+        return history;
+    }
+
+    private async Task<GetExtractDateFunctionResult?> GetDateFunctionCallResult(StoreUser storeUser, string datePrompt)
+    {
+        try
+        {
+            OpenAiApi api = new(storeUser.ApiKey);
+
+            JObject jObject = GetJObjectForDateExtractionFunctionCall();
+
+            ChatRequest request = new()
+            {
+                Model = OpenAiNg.Models.Model.ChatGPTTurbo1106,
+                Messages = new List<ChatMessage>(1)
+                {
+                    new(ChatMessageRole.User,
+                        $"Get the date from the user message '{datePrompt}' in json format. Take into account that Today's date is '{DateOnly.FromDateTime(DateTime.Today)}'.")
+                },
+                ResponseFormat = new ChatRequestResponseFormats {Type = ChatRequestResponseFormatTypes.Json},
+                Tools = new List<Tool>
+                {
+                    new(new ToolFunction(name: "GetDateFromUserPrompt",
+                        description: "Function must extract a date from user prompt",
+                        parameters: jObject))
+                }
+            };
+
+            ChatResult response = await api.Chat.CreateChatCompletionAsync(request);
+            GetExtractDateFunctionResult? result = JsonConvert.DeserializeObject<GetExtractDateFunctionResult>(
+                response.Choices?[0]
+                    .Message?.ToolCalls?[0].FunctionCall.Arguments ?? "");
+
+            return result;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("[{MethodName}] {Error}", nameof(GetDateFunctionCallResult), e.Message);
+            return null;
+        }
+    }
+
+    private static JObject GetJObjectForDateExtractionFunctionCall()
+    {
+        JObject jObject = new()
+        {
+            {
+                "type", "object"
+            },
+            {
+                "properties", new JObject
+                {
+                    {
+                        "date", new JObject
+                        {
+                            {"type", "string"},
+                            {
+                                "description",
+                                "Date in default for C# DateOnly format. Or default date if it was unsuccessful."
+                            }
+                        }
+                    },
+                    {
+                        "status", new JObject
+                        {
+                            {"type", "boolean"},
+                            {
+                                "description",
+                                "Date extraction status. True - if it was successful and false - if it doesn't."
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "required", new JArray("date", "status")
+            },
+        };
+        return jObject;
     }
 
     private async Task<Message> ResetContextCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -1415,7 +1528,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         string? response;
-#if RELEASE
         if (storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4)
         {
             response = await GetResponseFromOpenAiModel(botClient, storeUser, message, messageText, cancellationToken);
@@ -1424,14 +1536,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             response = await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken);
         }
-#endif
-
-#if DEBUG
-        response = """
-                   Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed a erat vel turpis iaculis sodales a nec felis. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas dignissim velit non tempus bibendum. Sed tincidunt velit pharetra, aliquet lorem ut, consequat ante. Vestibulum ligula tellus, pharetra ac mi ut, commodo semper risus. Curabitur porta sem turpis. Aliquam erat volutpat. Sed volutpat ex vitae massa pellentesque semper.
-                   Pellentesque hendrerit id ex a tempus. Quisque id pharetra lacus, in iaculis metus. Ut bibendum iaculis enim. Sed venenatis ipsum maximus ornare pharetra. Fusce eget felis dignissim, consectetur risus eget, fringilla dolor. Maecenas non iaculis erat. Etiam eu quam in magna rutrum suscipit quis vel erat. Nullam tempor rutrum libero ut aliquet. Quisque sed eleifend quam, vestibulum sollicitudin dolor. Curabitur molestie finibus erat sit amet cursus. Morbi ac elit eu erat ornare placerat a quis diam.
-                   """;
-#endif
         
         if (String.IsNullOrWhiteSpace(response))
         {
