@@ -1,5 +1,4 @@
 using LiteDB;
-using Newtonsoft.Json;
 
 namespace SgptBot.Models;
 
@@ -28,7 +27,7 @@ public class StoreUser
     public string UserName { get; set; }
     public bool IsAdministrator { get; set; }
     public string ApiKey { get; set; }
-    public List<Message> Conversation { get; set; } = new();
+    public List<Message> Conversation { get; set; } = [];
     public Model Model { get; set; } = Model.Gpt3;
     public bool IsBlocked { get; set; }
     public bool VoiceMode { get; set; }
@@ -37,6 +36,7 @@ public class StoreUser
     public DateTime ActivityTime { get; set; } = new(2020, 1, 1, 1, 00, 00);
     public bool AnewMode { get; set; }
     public string ClaudeApiKey { get; set; }
+    public List<Message> History { get; set; } = [];
 
     public override string ToString()
     {

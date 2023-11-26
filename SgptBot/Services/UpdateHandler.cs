@@ -419,7 +419,7 @@ public class UpdateHandler : IUpdateHandler
         }
         else
         {
-            storeUser.Conversation.Add(new SgptBot.Models.Message(Role.User, contextPrompt));
+            storeUser.Conversation.Add(new SgptBot.Models.Message(Role.User, contextPrompt, DateOnly.FromDateTime(DateTime.Today)));
         }
         
         int tokenCount = GetTokenCount(GetLastUserMessage(storeUser)!.Msg);
@@ -1126,7 +1126,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         RemoveAllSystemMessages(storeUser);
 
-        var newSystemMessage = new SgptBot.Models.Message(Role.System, contextPrompt);
+        var newSystemMessage = new SgptBot.Models.Message(Role.System, contextPrompt, DateOnly.FromDateTime(DateTime.Today));
         storeUser.Conversation.Insert(0, newSystemMessage);
 
         _userRepository.UpdateUser(storeUser);
@@ -1286,8 +1286,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        Models.Message[] messages = storeUser.Conversation.Where(m => m.Role != Role.System).ToArray();
-        foreach (Models.Message msg in messages)
+        Models.Message[] currentContextWindowMessages =
+            storeUser.Conversation.Where(m => m.Role != Role.System).ToArray();
+        
+        storeUser.History.AddRange(currentContextWindowMessages);
+        
+        foreach (Models.Message msg in currentContextWindowMessages)
         {
             bool removeStatus = storeUser.Conversation.Remove(msg);
             if (removeStatus == false)
@@ -1354,6 +1358,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         string? response;
+#if RELEASE
         if (storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4)
         {
             response = await GetResponseFromOpenAiModel(botClient, storeUser, message, messageText, cancellationToken);
@@ -1362,6 +1367,14 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             response = await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken);
         }
+#endif
+
+#if DEBUG
+        response = """
+                   Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed a erat vel turpis iaculis sodales a nec felis. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas dignissim velit non tempus bibendum. Sed tincidunt velit pharetra, aliquet lorem ut, consequat ante. Vestibulum ligula tellus, pharetra ac mi ut, commodo semper risus. Curabitur porta sem turpis. Aliquam erat volutpat. Sed volutpat ex vitae massa pellentesque semper.
+                   Pellentesque hendrerit id ex a tempus. Quisque id pharetra lacus, in iaculis metus. Ut bibendum iaculis enim. Sed venenatis ipsum maximus ornare pharetra. Fusce eget felis dignissim, consectetur risus eget, fringilla dolor. Maecenas non iaculis erat. Etiam eu quam in magna rutrum suscipit quis vel erat. Nullam tempor rutrum libero ut aliquet. Quisque sed eleifend quam, vestibulum sollicitudin dolor. Curabitur molestie finibus erat sit amet cursus. Morbi ac elit eu erat ornare placerat a quis diam.
+                   """;
+#endif
         
         if (String.IsNullOrWhiteSpace(response))
         {
@@ -1371,8 +1384,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         
         _logger.LogInformation("Received response message from model.");
         
-        storeUser.Conversation.Add(new Models.Message(Role.User, messageText));
-        storeUser.Conversation.Add(new Models.Message(Role.Ai, response));
+        storeUser.Conversation.Add(new Models.Message(Role.User, messageText, DateOnly.FromDateTime(DateTime.Today)));
+        storeUser.Conversation.Add(new Models.Message(Role.Ai, response, DateOnly.FromDateTime(DateTime.Today)));
 
         if (storeUser.AnewMode == false)
         {
