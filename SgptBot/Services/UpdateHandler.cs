@@ -34,7 +34,6 @@ public class UpdateHandler : IUpdateHandler
     private readonly ITokenizer _tokenizer;
     private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip" };
 
-    // ReSharper disable once ConvertToPrimaryConstructor
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor)
     {
@@ -66,7 +65,7 @@ public class UpdateHandler : IUpdateHandler
 
         Message message = callbackQuery.Message!;
         
-        var storeUser = GetStoreUser(callbackQuery.From);
+        StoreUser? storeUser = GetStoreUser(callbackQuery.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -80,7 +79,7 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
         
-        var strings = data.Split(' ');
+        string[] strings = data.Split(' ');
         
         await _botClient.AnswerCallbackQueryAsync(
             callbackQueryId: callbackQuery.Id,
@@ -908,7 +907,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     
     private async Task<Message> DenyCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -922,7 +921,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
         
-        var strings = message.Text!.Split(' ');
+        string[] strings = message.Text!.Split(' ');
         if (strings.Length < 2)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -930,7 +929,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var userId = strings[1];
+        string userId = strings[1];
         if (String.IsNullOrWhiteSpace(userId))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -938,7 +937,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var parseResult = Int32.TryParse(userId, out var id);
+        bool parseResult = Int32.TryParse(userId, out int id);
         if (parseResult == false)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -946,7 +945,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var userById = _userRepository.GetUserById(id);
+        StoreUser? userById = _userRepository.GetUserById(id);
         if (userById == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -964,7 +963,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> AllowCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -978,7 +977,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
         
-        var strings = message.Text!.Split(' ');
+        string[] strings = message.Text!.Split(' ');
         if (strings.Length < 2)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -986,7 +985,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var userId = strings[1];
+        string userId = strings[1];
         if (String.IsNullOrWhiteSpace(userId))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -994,7 +993,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var parseResult = Int32.TryParse(userId, out var id);
+        bool parseResult = Int32.TryParse(userId, out int id);
         if (parseResult == false)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -1002,7 +1001,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var userById = _userRepository.GetUserById(id);
+        StoreUser? userById = _userRepository.GetUserById(id);
         if (userById == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -1278,7 +1277,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> ResetContextCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -1295,14 +1294,14 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> ContextCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
         
-        var strings = message.Text!.Split(' ');
+        string[] strings = message.Text!.Split(' ');
         if (strings.Length < 2)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -1310,7 +1309,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        var contextPrompt = String.Join(' ', strings.Skip(1));
+        string contextPrompt = String.Join(' ', strings.Skip(1));
         if (String.IsNullOrWhiteSpace(contextPrompt))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -1320,7 +1319,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         RemoveAllSystemMessages(storeUser);
 
-        var newSystemMessage = new SgptBot.Models.Message(Role.System, contextPrompt, DateOnly.FromDateTime(DateTime.Today));
+        Models.Message newSystemMessage = new SgptBot.Models.Message(Role.System, contextPrompt, DateOnly.FromDateTime(DateTime.Today));
         storeUser.Conversation.Insert(0, newSystemMessage);
 
         _userRepository.UpdateUser(storeUser);
@@ -1333,8 +1332,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private static void RemoveAllSystemMessages(StoreUser storeUser)
     {
-        var systemMessages = storeUser.Conversation.Where(msg => msg.Role == Role.System).ToArray();
-        foreach (var systemMessage in systemMessages)
+        Models.Message[] systemMessages = storeUser.Conversation.Where(msg => msg.Role == Role.System).ToArray();
+        foreach (Models.Message systemMessage in systemMessages)
         {
             storeUser.Conversation.Remove(systemMessage);
         }
@@ -1512,21 +1511,21 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> SetKeyCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
 
-        var strings = message.Text!.Split(' ');
+        string[] strings = message.Text!.Split(' ');
         if (strings.Length < 2)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "After '/key' command you must input your openAI API key. You can get your key here - https://platform.openai.com/account/api-keys. Try again.",
                 cancellationToken: cancellationToken);
         }
 
-        var apiKey = strings[1];
+        string apiKey = strings[1];
         if (String.IsNullOrWhiteSpace(apiKey))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "After '/key' command you must input your openAI API key. You can get your key here - https://platform.openai.com/account/api-keys. Try again.",
@@ -1925,7 +1924,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> UsageCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var storeUser = GetStoreUser(message.From);
+        StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store",
@@ -1975,7 +1974,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     public async Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
-        var errorMessage = exception switch
+        string errorMessage = exception switch
         {
             ApiRequestException apiRequestException => $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
             _ => exception.ToString()
