@@ -127,7 +127,7 @@ public class UpdateHandler : IUpdateHandler
             "/key"                   => SetKeyCommand(_botClient, message, cancellationToken),
             "/key_claude"            => SetKeyClaudeCommand(_botClient, message, cancellationToken),
             "/reset"                 => ResetConversationCommand(_botClient, message, cancellationToken),
-            "/info"                  => InfoCommand(_botClient, message, cancellationToken),
+            "/info"                  => InfoCommand(message, cancellationToken),
             "/model"                 => ModelCommand(_botClient, message, cancellationToken),
             "/context"               => ContextCommand(_botClient, message, cancellationToken),
             "/contact"               => ContactCommand(_botClient, message, cancellationToken),
@@ -1427,12 +1427,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             cancellationToken: cancellationToken);
     }
 
-    private async Task<Message> InfoCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    private async Task<Message> InfoCommand(Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+            return await _botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
 
@@ -1444,16 +1444,15 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         int tokenCount = GetTokenCount(builder.ToString());
         
-#pragma warning disable CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
         string mName = storeUser.Model switch
-#pragma warning restore CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
         {
             Model.Gpt3 => "GPT-3.5 Turbo",
             Model.Gpt4 => "GPT-4 Turbo",
             Model.Claude21 => "Claude 2.1",
+            _ => throw new ArgumentOutOfRangeException()
         };
 
-        return await botClient.SendTextMessageAsync(message.Chat.Id,
+        return await _botClient.SendTextMessageAsync(message.Chat.Id,
             $"First name: `{storeUser.FirstName}`\n" +
             $"Last name: `{storeUser.LastName}`\n" +
             $"Username: `{storeUser.UserName}`\n" +
