@@ -3,6 +3,7 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.Memory.Chroma;
 using Microsoft.SemanticKernel.Memory;
 using Microsoft.SemanticKernel.Text;
+using VectorStoreWebApi.Models;
 
 #pragma warning disable CS0618 // Type or member is obsolete
 
@@ -15,6 +16,8 @@ public class Program
     private static IConfiguration? _config;
     private static IKernel? _kernel;
     private static ChromaMemoryStore? _chromaStore;
+    private static int _returnLimit;
+    private static double _minRelScore;
 
     private static IConfiguration CreateConfig() => new ConfigurationBuilder()
         .AddEnvironmentVariables().
@@ -33,7 +36,21 @@ public class Program
     {
         _config = CreateConfig();
         string endpoint = _config["CHROMADBENDPOINT"] ?? throw new Exception("CHROMADBENDPOINT env var required.");
-        
+        string returnLimitStr = _config["RETURNLIMIT"] ?? throw new Exception("RETURNLIMIT env var required.");
+        string minRelScoreStr = _config["MINRELEVANCESCORE"] ?? throw new Exception("MINRELEVANCESCORE env var required.");
+
+        bool limitParseResult = Int32.TryParse(returnLimitStr, out _returnLimit);
+        if (limitParseResult == false)
+        {
+            throw new Exception("RETURNLIMIT env var parse fail.");
+        }
+
+        bool minRelScoreParseResult = Double.TryParse(minRelScoreStr, out _minRelScore);
+        if (minRelScoreParseResult == false)
+        {
+            throw new Exception("MINRELEVANCESCORE env var parse fail.");
+        }
+
         _chromaStore = new ChromaMemoryStore(endpoint);
         
         // ensure that chromadb running
@@ -62,71 +79,61 @@ public class Program
 
         app.UseAuthorization();
 
-        app.MapGet("/SearchInMemory", async (string key, string prompt, string userId, HttpContext _) =>
-            {
-                try
-                {
-                    _kernel = CreateKernel(key);
-
-                    bool doesCollectionExistAsync = await _chromaStore.DoesCollectionExistAsync(userId);
-                    if (doesCollectionExistAsync == false)
-                    {
-                        return Results.Ok(Array.Empty<string>());
-                    }
-                    
-                    IAsyncEnumerable<MemoryQueryResult> docs =
-                        _kernel.Memory.SearchAsync(collection: userId, query: prompt, limit: 3, minRelevanceScore: 0.7D);
-                    MemoryQueryResult[] memoryQueryResults = docs.ToBlockingEnumerable().ToArray();
-
-                    if (memoryQueryResults.Length == 0)
-                    {
-                        return Results.Ok(Array.Empty<string>());
-                    }
-
-                    return Results.Ok(memoryQueryResults.Select(result => result.Metadata.Text).ToArray());
-                }
-                catch (Exception ex)
-                {
-                    return Results.Problem(detail: $"An unexpected error occurred: {ex}",
-                        statusCode: StatusCodes.Status500InternalServerError);
-                }
-            });
-        
-        app.MapGet("/SearchInSpecificMemory",
-            async (string key, string prompt, string memoryId, string userId, HttpContext _) =>
+        app.MapPost("/SearchInMemory", async (MemorySearchDto input, HttpContext _, ILogger<Program> logger) =>
         {
+            logger.LogInformation("SearchInMemory invoked with user ID: {UserId} and prompt: {Prompt}", input.UserId,
+                input.Prompt);
+
             try
             {
-                _kernel = CreateKernel(key);
+                _kernel = CreateKernel(input.Key);
 
-                bool doesCollectionExistAsync = await _chromaStore.DoesCollectionExistAsync(userId);
+                logger.LogDebug("Checking if collection exists for user ID: {UserId}", input.UserId);
+
+                bool doesCollectionExistAsync = await _chromaStore.DoesCollectionExistAsync(input.UserId);
                 if (doesCollectionExistAsync == false)
                 {
+                    logger.LogWarning("Collection does not exist for user ID: {UserId}", input.UserId);
                     return Results.Ok(Array.Empty<string>());
                 }
-                    
+
                 IAsyncEnumerable<MemoryQueryResult> docs =
-                    _kernel.Memory.SearchAsync(collection: userId, query: prompt, limit: 4);
+                    _kernel.Memory.SearchAsync(collection: input.UserId, query: input.Prompt, limit: _returnLimit,
+                        minRelevanceScore: _minRelScore);
                 MemoryQueryResult[] memoryQueryResults = docs.ToBlockingEnumerable().ToArray();
+
+                if (String.IsNullOrWhiteSpace(input.MemoryId) == false)
+                {
+                    logger.LogDebug("Filtering results by Memory ID: {MemoryId}", input.MemoryId);
+                    memoryQueryResults = memoryQueryResults
+                        .Where(result => result.Metadata.Description == input.MemoryId).ToArray();
+                }
 
                 if (memoryQueryResults.Length == 0)
                 {
+                    logger.LogInformation("No results found for user ID: {UserId} with prompt: {Prompt}", input.UserId,
+                        input.Prompt);
                     return Results.Ok(Array.Empty<string>());
                 }
 
-                MemoryQueryResult[] queryResults = memoryQueryResults.Where(result => result.Metadata.Id == memoryId).ToArray();
-
-                return Results.Ok(queryResults.Select(result => result.Metadata.Text).ToArray());
+                logger.LogInformation("Found {Count} results for user ID: {UserId} with prompt: {Prompt}",
+                    memoryQueryResults.Length, input.UserId, input.Prompt);
+                return Results.Ok(memoryQueryResults.Select(result => result.Metadata.Text).ToArray());
             }
             catch (Exception ex)
             {
+                logger.LogError(ex, "An unexpected error occurred during memory search for user ID: {UserId}",
+                    input.UserId);
                 return Results.Problem(detail: $"An unexpected error occurred: {ex}",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         });
-        
-        app.MapPost("/AddMemory", async (MemoryInputDto input, HttpContext context) =>
+
+        app.MapPost("/AddMemory", async (MemoryInputDto input, HttpContext _, ILogger<Program> logger) =>
         {
+            logger.LogInformation("AddMemory invoked with Memory ID: {MemoryId} for User ID: {UserId}", input.MemoryId,
+                input.UserId);
+
             try
             {
                 _kernel = CreateKernel(input.Key);
@@ -136,9 +143,13 @@ public class Program
                     lines,
                     200).ToArray();
 
-                Dictionary<string,List<string>> result = new() {{input.MemoryId, []}};
+                logger.LogDebug("Split memory text into {ParagraphCount} paragraphs.", paragraphs.Length);
+
+                Dictionary<string, List<string>> result = new() {{input.MemoryId, []}};
                 foreach (string paragraph in paragraphs)
                 {
+                    logger.LogDebug("Saving a paragraph with Memory ID: {MemoryId}", input.MemoryId);
+
                     string id = await _kernel.Memory.SaveInformationAsync(
                         collection: input.UserId,
                         text: paragraph,
@@ -147,52 +158,93 @@ public class Program
                     result[input.MemoryId].Add(id);
                 }
 
+                logger.LogInformation("Memory added successfully with Memory ID: {MemoryId} for User ID: {UserId}",
+                    input.MemoryId, input.UserId);
+
                 return Results.Ok(result);
             }
             catch (Exception ex)
             {
+                logger.LogError(ex,
+                    "An unexpected error occurred while adding memory for User ID: {UserId} with Memory ID: {MemoryId}",
+                    input.UserId, input.MemoryId);
+
                 return Results.Problem(detail: $"An unexpected error occurred: {ex}",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         });
-        
-        app.MapDelete("/DeleteAllMemory", async (string userId, HttpContext _) =>
+
+        app.MapDelete("/DeleteAllMemory", async (string userId, HttpContext _, ILogger<Program> logger) =>
         {
+            logger.LogInformation("DeleteAllMemory invoked for User ID: {UserId}", userId);
+
             try
             {
+                logger.LogDebug("Checking existence of collection for User ID: {UserId}", userId);
+
                 bool doesCollectionExistAsync = await _chromaStore.DoesCollectionExistAsync(userId);
                 if (doesCollectionExistAsync == false)
                 {
+                    logger.LogWarning("No collection to delete for User ID: {UserId}, collection does not exist.",
+                        userId);
+
                     return Results.Ok();
                 }
+
+                logger.LogDebug("Deleting collection for User ID: {UserId}", userId);
 
                 await _chromaStore.DeleteCollectionAsync(userId);
 
-                return Results.Ok();
-            }
-            catch (Exception ex)
-            {
-                return Results.Problem(detail: $"An unexpected error occurred: {ex}",
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
-        });
-        
-        app.MapDelete("/DeleteMemoryById", async (string userId, string memoryId, HttpContext _) =>
-        {
-            try
-            {
-                bool doesCollectionExistAsync = await _chromaStore.DoesCollectionExistAsync(userId);
-                if (doesCollectionExistAsync == false)
-                {
-                    return Results.Ok();
-                }
-                
-                await _chromaStore.RemoveAsync(userId, memoryId);
+                logger.LogInformation("Successfully deleted all memory for User ID: {UserId}", userId);
 
                 return Results.Ok();
             }
             catch (Exception ex)
             {
+                logger.LogError(ex, "An unexpected error occurred while deleting all memory for User ID: {UserId}",
+                    userId);
+
+                return Results.Problem(detail: $"An unexpected error occurred: {ex}",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        });
+
+        app.MapPost("/DeleteMemoryById", async (MemoryDeleteDto input, HttpContext _, ILogger<Program> logger) =>
+        {
+            logger.LogInformation("DeleteMemoryById invoked for User ID: {UserId}", input.UserId);
+
+            try
+            {
+                logger.LogDebug("Checking if collection exists for User ID: {UserId}", input.UserId);
+
+                bool doesCollectionExistAsync = await _chromaStore.DoesCollectionExistAsync(input.UserId);
+                if (doesCollectionExistAsync == false)
+                {
+                    logger.LogWarning("Cannot delete memory, collection does not exist for User ID: {UserId}",
+                        input.UserId);
+
+                    return Results.Ok();
+                }
+
+                logger.LogInformation("Deleting {MemoryCount} memory items by ID for User ID: {UserId}",
+                    input.IdListToDelete.Length, input.UserId);
+
+                foreach (string id in input.IdListToDelete)
+                {
+                    logger.LogDebug("Deleting memory with ID: {MemoryId} for User ID: {UserId}", id, input.UserId);
+
+                    await _chromaStore.RemoveAsync(input.UserId, id);
+                }
+
+                logger.LogInformation("All specified memories deleted successfully for User ID: {UserId}",
+                    input.UserId);
+                return Results.Ok();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An unexpected error occurred while deleting memories for User ID: {UserId}",
+                    input.UserId);
+
                 return Results.Problem(detail: $"An unexpected error occurred: {ex}",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
@@ -205,12 +257,4 @@ public class Program
 
         await app.RunAsync();
     }
-}
-
-public class MemoryInputDto
-{
-    public string Key { get; set; }
-    public string Memory { get; set; }
-    public string MemoryId { get; set; }
-    public string UserId { get; set; }
 }
