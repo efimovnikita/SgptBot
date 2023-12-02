@@ -161,7 +161,7 @@ public class Program
 
                 logger.LogDebug("Split memory text into {ParagraphCount} paragraphs.", paragraphs.Length);
 
-                Dictionary<string, List<string>> result = new() {{input.MemoryId, []}};
+                AddMemoryResult memoryResult = new() { MemoryId = input.MemoryId };
                 foreach (string paragraph in paragraphs)
                 {
                     logger.LogDebug("Saving a paragraph with Memory ID: {MemoryId}", input.MemoryId);
@@ -171,13 +171,14 @@ public class Program
                         text: paragraph,
                         description: input.MemoryId,
                         id: Guid.NewGuid().ToString());
-                    result[input.MemoryId].Add(id);
+                    
+                    memoryResult.ParagraphIds.Add(id);
                 }
 
                 logger.LogInformation("Memory added successfully with Memory ID: {MemoryId} for User ID: {UserId}",
                     input.MemoryId, input.UserId);
 
-                return Results.Ok(result);
+                return Results.Ok(memoryResult);
             }
             catch (Exception ex)
             {
