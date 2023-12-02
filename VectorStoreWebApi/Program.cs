@@ -86,6 +86,14 @@ public class Program
 
             try
             {
+                if (new[] {input.Key, input.Prompt, input.UserId}.All(s =>
+                        String.IsNullOrWhiteSpace(s) == false) == false)
+                {
+                    logger.LogError("SearchInMemory validation failed");
+                    return Results.Problem(detail: "'Key', 'Prompt', 'UserId' properties must be set.", 
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+                
                 _kernel = CreateKernel(input.Key);
 
                 logger.LogDebug("Checking if collection exists for user ID: {UserId}", input.UserId);
@@ -136,6 +144,14 @@ public class Program
 
             try
             {
+                if (new[] {input.Key, input.Memory, input.MemoryId, input.UserId}.All(s =>
+                        String.IsNullOrWhiteSpace(s) == false) == false)
+                {
+                    logger.LogError("AddMemory validation failed");
+                    return Results.Problem(detail: "All input properties must be set.", 
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+                
                 _kernel = CreateKernel(input.Key);
 
                 List<string> lines = TextChunker.SplitPlainTextLines(input.Memory, 128);
@@ -180,6 +196,13 @@ public class Program
 
             try
             {
+                if (String.IsNullOrWhiteSpace(userId))
+                {
+                    logger.LogError("DeleteAllMemory validation failed");
+                    return Results.Problem(detail: "'userId' input property must be set.", 
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+                
                 logger.LogDebug("Checking existence of collection for User ID: {UserId}", userId);
 
                 bool doesCollectionExistAsync = await _chromaStore.DoesCollectionExistAsync(userId);
@@ -215,6 +238,20 @@ public class Program
 
             try
             {
+                if (String.IsNullOrWhiteSpace(input.UserId))
+                {
+                    logger.LogError("DeleteMemoryById validation failed");
+                    return Results.Problem(detail: "'userId' input property must be set.", 
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+                
+                if (input.IdListToDelete.Length == 0)
+                {
+                    logger.LogError("DeleteMemoryById validation failed");
+                    return Results.Problem(detail: "'IdListToDelete' array property is empty.", 
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+                
                 logger.LogDebug("Checking if collection exists for User ID: {UserId}", input.UserId);
 
                 bool doesCollectionExistAsync = await _chromaStore.DoesCollectionExistAsync(input.UserId);
