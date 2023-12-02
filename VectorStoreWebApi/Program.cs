@@ -154,10 +154,11 @@ public class Program
                 
                 _kernel = CreateKernel(input.Key);
 
-                List<string> lines = TextChunker.SplitPlainTextLines(input.Memory, 128);
+                List<string> lines = TextChunker.SplitPlainTextLines(text: input.Memory, maxTokensPerLine: input.MaxTokensPerLine);
                 string[] paragraphs = TextChunker.SplitPlainTextParagraphs(
-                    lines,
-                    200).ToArray();
+                    lines: lines,
+                    overlapTokens: input.OverlapTokens,
+                    maxTokensPerParagraph: input.MaxTokensPerParagraph).ToArray();
 
                 logger.LogDebug("Split memory text into {ParagraphCount} paragraphs.", paragraphs.Length);
 
