@@ -173,7 +173,7 @@ public class Program
                         description: input.MemoryId,
                         id: Guid.NewGuid().ToString());
                     
-                    memoryResult.ParagraphIds.Add(id);
+                    memoryResult.ChunkIds.Add(id);
                 }
 
                 logger.LogInformation("Memory added successfully with Memory ID: {MemoryId} for User ID: {UserId}",
