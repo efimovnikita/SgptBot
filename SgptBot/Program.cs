@@ -55,10 +55,16 @@ IHost host = Host.CreateDefaultBuilder(args)
             throw new ArgumentNullException(nameof(ttsApi), "Environment variable TTS is not set.");
         }
         
-        string? textFromYoutubeApi = Environment.GetEnvironmentVariable("TFYAPI");
-        if (String.IsNullOrEmpty(textFromYoutubeApi))
+        string? youtubeApi = Environment.GetEnvironmentVariable("TFYAPI");
+        if (String.IsNullOrEmpty(youtubeApi))
         {
-            throw new ArgumentNullException(nameof(textFromYoutubeApi), "Environment variable TFYAPI is not set.");
+            throw new ArgumentNullException(nameof(youtubeApi), "Environment variable TFYAPI is not set.");
+        }
+
+        string? vectorStoreApi = Environment.GetEnvironmentVariable("VECTORSTOREAPI");
+        if (String.IsNullOrWhiteSpace(vectorStoreApi))
+        {
+            throw new ArgumentNullException(nameof(vectorStoreApi), "Environment variable VECTORSTOREAPI is not set.");
         }
 
         services.AddHttpClient("telegram_bot_client")
@@ -79,7 +85,7 @@ IHost host = Host.CreateDefaultBuilder(args)
             };
             HttpClient httpClient = new(httpClientHandler);
             httpClient.Timeout = TimeSpan.FromMinutes(5);
-            return new YoutubeTextProcessorMiddleware(httpClient, textFromYoutubeApi);
+            return new YoutubeTextProcessorMiddleware(httpClient, youtubeApi);
         });
         
         services.AddScoped<UpdateHandler>();
