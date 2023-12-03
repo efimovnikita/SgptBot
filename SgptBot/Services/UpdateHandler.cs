@@ -1463,6 +1463,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Anew mode: `{(storeUser.AnewMode ? "on" : "off")}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
             $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
+            $"Context filter mode: `{(storeUser.ContextFilterMode ? "on" : "off" )}`\n" +
             $"Current context window size (number of tokens): `{tokenCount}`\n" +
             $"Context prompt: `{storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}`",
             parseMode: ParseMode.Markdown,
