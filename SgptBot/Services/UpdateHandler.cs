@@ -142,12 +142,31 @@ public class UpdateHandler : IUpdateHandler
             "/toggle_img_quality"    => ToggleImgQualityCommand(_botClient, message, cancellationToken),
             "/toggle_img_style"      => ToggleImgStyleCommand(_botClient, message, cancellationToken),
             "/toggle_anew_mode"      => ToggleAnewMode(_botClient, message, cancellationToken),
+            "/toggle_context_filter_mode" => ToggleContextFilterMode(message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ToggleContextFilterMode(Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (await ValidateUser(storeUser, _botClient, message.Chat.Id) == false)
+        {
+            return await _botClient.SendTextMessageAsync(message.Chat.Id,
+                "Error: User validation failed.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser!.ContextFilterMode = !storeUser.ContextFilterMode;
+        _userRepository.UpdateUser(storeUser);
+        
+        return await _botClient.SendTextMessageAsync(message.Chat.Id, 
+            $"Context filter mode is: {(storeUser.ContextFilterMode ? "On" : "Off")}",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ContactCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -1945,6 +1964,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/toggle_img_quality - switch between standard or HD image quality\n" +
                        "/toggle_img_style - switch between vivid or natural image style\n" +
                        "/toggle_anew_mode - switch on or off 'anew' mode. With this mode you can start each conversation from the beginning without relying on previous history\n" +
+                       "/toggle_context_filter_mode - switch on or off 'context filter' mode. This mode simplifies interactions by narrowing down the context to just the essential parts for quick and clear communication\n" +
                        "/image - generate an image with help of DALL·E 3\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
