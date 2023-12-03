@@ -163,7 +163,7 @@ public class Program
 
                 logger.LogDebug("Split memory text into {ParagraphCount} paragraphs.", paragraphs.Length);
 
-                AddMemoryResult memoryResult = new() { MemoryId = input.MemoryId };
+                VectorMemoryItem memoryItem = new() { MemoryId = input.MemoryId };
                 foreach (string paragraph in paragraphs)
                 {
                     logger.LogDebug("Saving a paragraph with Memory ID: {MemoryId}", input.MemoryId);
@@ -174,13 +174,13 @@ public class Program
                         description: input.MemoryId,
                         id: Guid.NewGuid().ToString());
                     
-                    memoryResult.ChunkIds.Add(id);
+                    memoryItem.ChunkIds.Add(id);
                 }
 
                 logger.LogInformation("Memory added successfully with Memory ID: {MemoryId} for User ID: {UserId}",
                     input.MemoryId, input.UserId);
 
-                return Results.Ok(memoryResult);
+                return Results.Ok(memoryItem);
             }
             catch (Exception ex)
             {

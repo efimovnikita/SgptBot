@@ -1,7 +1,7 @@
 namespace SgptBot.Shared.Models;
 
 #pragma warning disable CS0618
-public class AddMemoryResult
+public class VectorMemoryItem
 {
     public string MemoryId { get; set; } = "";
     public List<string> ChunkIds { get; set; } = [];
