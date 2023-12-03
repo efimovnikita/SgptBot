@@ -167,7 +167,7 @@ public class UpdateHandler : IUpdateHandler
         _userRepository.UpdateUser(storeUser);
         
         return await _botClient.SendTextMessageAsync(message.Chat.Id, 
-            $"Context filter mode is: {(storeUser.ContextFilterMode ? "On" : "Off")}",
+            $"Context filter mode is: {(storeUser.ContextFilterMode ? "On" : "Off")}\n\nTurn on the 'Context Filter' mode, and the bot will keep conversations simple and to the point. This mode makes the bot act like a filter, picking out only the most important parts of what you say. It helps avoid confusion by ignoring the bits that aren't needed for understanding. With this mode, the bot's answers are clear and focused, making sure you get the information you need quickly and easily.",
             cancellationToken: cancellationToken);
     }
 
