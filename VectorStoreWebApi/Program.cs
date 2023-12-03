@@ -110,11 +110,10 @@ public class Program
                         minRelevanceScore: _minRelScore);
                 MemoryQueryResult[] memoryQueryResults = docs.ToBlockingEnumerable().ToArray();
 
-                if (String.IsNullOrWhiteSpace(input.MemoryId) == false)
+                if (input.MemoryIds.Length > 0)
                 {
-                    logger.LogDebug("Filtering results by Memory ID: {MemoryId}", input.MemoryId);
                     memoryQueryResults = memoryQueryResults
-                        .Where(result => result.Metadata.Description == input.MemoryId).ToArray();
+                        .Where(result => input.MemoryIds.Contains(result.Metadata.Description)).ToArray();
                 }
 
                 if (memoryQueryResults.Length == 0)
