@@ -87,6 +87,12 @@ IHost host = Host.CreateDefaultBuilder(args)
             httpClient.Timeout = TimeSpan.FromMinutes(5);
             return new YoutubeTextProcessorMiddleware(httpClient, youtubeApi);
         });
+
+        services.AddSingleton<IVectorStoreMiddleware>(_ =>
+        {
+            HttpClient httpClient = new();
+            return new VectorStoreMiddleware(httpClient, vectorStoreApi);
+        });
         
         services.AddScoped<UpdateHandler>();
         services.AddScoped<ReceiverService>();
@@ -95,3 +101,19 @@ IHost host = Host.CreateDefaultBuilder(args)
     .Build();
 
 await host.RunAsync();
+
+public class VectorStoreMiddleware : IVectorStoreMiddleware
+{
+    private readonly HttpClient _httpClient;
+    private readonly string _vectorStoreApi;
+
+    public VectorStoreMiddleware(HttpClient httpClient, string vectorStoreApi)
+    {
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));;
+        _vectorStoreApi = vectorStoreApi ?? throw new ArgumentNullException(nameof(vectorStoreApi));;
+    }
+}
+
+public interface IVectorStoreMiddleware
+{
+}

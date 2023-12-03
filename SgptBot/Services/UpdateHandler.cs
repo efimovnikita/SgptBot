@@ -31,17 +31,19 @@ public class UpdateHandler : IUpdateHandler
     private readonly ApplicationSettings _appSettings;
     private readonly IUserRepository _userRepository;
     private readonly IYoutubeTextProcessor _youtubeTextProcessor;
+    private readonly IVectorStoreMiddleware _vectorStoreMiddleware;
     private readonly ITokenizer _tokenizer;
     private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip" };
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
-        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor)
+        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware)
     {
         _botClient = botClient;
         _logger = logger;
         _appSettings = appSettings;
         _userRepository = userRepository;
         _youtubeTextProcessor = youtubeTextProcessor;
+        _vectorStoreMiddleware = vectorStoreMiddleware;
         _tokenizer = TokenizerBuilder.CreateByModelNameAsync("gpt-4").Result;
     }
 
