@@ -78,6 +78,8 @@ public class Program
         app.UseHttpsRedirection();
 
         app.UseAuthorization();
+        
+        app.MapGet("/heartbeat", () => Results.Ok("API is alive"));
 
         app.MapPost("/SearchInMemory", async (MemorySearchDto input, HttpContext _, ILogger<Program> logger) =>
         {
