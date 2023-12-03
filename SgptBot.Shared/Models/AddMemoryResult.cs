@@ -1,4 +1,4 @@
-namespace VectorStoreWebApi.Models;
+namespace SgptBot.Shared.Models;
 
 #pragma warning disable CS0618
 public class AddMemoryResult

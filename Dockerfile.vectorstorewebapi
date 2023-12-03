@@ -1,0 +1,26 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS build-env
+
+WORKDIR /source
+
+COPY *.sln .
+COPY ./SgptBot.Shared/SgptBot.Shared.csproj ./SgptBot.Shared/
+COPY ./VectorStoreWebApi/VectorStoreWebApi.csproj ./VectorStoreWebApi/
+
+COPY ./SgptBot.Shared/ ./SgptBot.Shared/
+COPY ./VectorStoreWebApi/ ./VectorStoreWebApi/
+
+RUN dotnet publish ./SgptBot.Shared/SgptBot.Shared.csproj -c Release -o /app/publish/SgptBot.Shared
+RUN dotnet publish ./VectorStoreWebApi/VectorStoreWebApi.csproj -c Release -o /app/publish/VectorStoreWebApi
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-jammy AS runtime
+WORKDIR /app
+
+RUN mkdir -p /app/SgptBot.Shared
+RUN mkdir -p /app/VectorStoreWebApi
+
+COPY --from=build-env /app/publish/SgptBot.Shared /app/SgptBot.Shared
+COPY --from=build-env /app/publish/VectorStoreWebApi /app/VectorStoreWebApi
+
+EXPOSE 80
+
+ENTRYPOINT ["dotnet", "/app/VectorStoreWebApi/VectorStoreWebApi.dll"]

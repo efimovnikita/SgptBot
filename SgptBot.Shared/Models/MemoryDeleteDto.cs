@@ -1,6 +1,6 @@
-namespace VectorStoreWebApi.Models;
+namespace SgptBot.Shared.Models;
 
-internal class MemoryDeleteDto
+public class MemoryDeleteDto
 {
     public string UserId { get; set; } = "";
     public string[] IdListToDelete { get; set; } = [];

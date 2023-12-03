@@ -3,7 +3,7 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.Memory.Chroma;
 using Microsoft.SemanticKernel.Memory;
 using Microsoft.SemanticKernel.Text;
-using VectorStoreWebApi.Models;
+using SgptBot.Shared.Models;
 
 #pragma warning disable CS0618 // Type or member is obsolete
 

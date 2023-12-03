@@ -1,7 +1,7 @@
-namespace VectorStoreWebApi.Models;
+namespace SgptBot.Shared.Models;
 
 #pragma warning disable CS0618
-internal class MemoryInputDto
+public class MemoryInputDto
 {
     public string Key { get; set; } = "";
     public string Memory { get; set; } = "";

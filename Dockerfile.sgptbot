@@ -1,0 +1,29 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build-env
+
+WORKDIR /source
+
+COPY *.sln .
+COPY ./SgptBot.Shared/SgptBot.Shared.csproj ./SgptBot.Shared/
+COPY ./SgptBot/SgptBot.csproj ./SgptBot/
+
+COPY ./SgptBot.Shared/ ./SgptBot.Shared/
+COPY ./SgptBot/ ./SgptBot/
+
+RUN dotnet publish ./SgptBot.Shared/SgptBot.Shared.csproj -c Release -o /app/publish/SgptBot.Shared
+RUN dotnet publish ./SgptBot/SgptBot.csproj -c Release -o /app/publish/SgptBot
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
+WORKDIR /app
+
+RUN apk add --no-cache icu-libs krb5-libs libgcc libintl libssl1.1 libstdc++ zlib
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+
+RUN mkdir -p /app/SgptBot.Shared
+RUN mkdir -p /app/SgptBot
+
+COPY --from=build-env /app/publish/SgptBot.Shared /app/SgptBot.Shared
+COPY --from=build-env /app/publish/SgptBot /app/SgptBot
+
+EXPOSE 80
+
+ENTRYPOINT ["dotnet", "/app/SgptBot/SgptBot.dll"]

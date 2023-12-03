@@ -1,6 +1,6 @@
-namespace VectorStoreWebApi.Models;
+namespace SgptBot.Shared.Models;
 
-internal class MemorySearchDto
+public class MemorySearchDto
 {
     public string Key { get; set; } = "";
     public string Prompt { get; set; } = "";

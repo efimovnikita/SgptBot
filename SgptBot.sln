@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SemanticKernelTest", "Seman
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VectorStoreWebApi", "VectorStoreWebApi\VectorStoreWebApi.csproj", "{458666F2-EA92-4508-988B-5F79939EA437}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgptBot.Shared", "SgptBot.Shared\SgptBot.Shared.csproj", "{34FAF9CA-1007-4984-BC0B-C52545B3F1AD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,5 +44,9 @@ Global
 		{458666F2-EA92-4508-988B-5F79939EA437}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{458666F2-EA92-4508-988B-5F79939EA437}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{458666F2-EA92-4508-988B-5F79939EA437}.Release|Any CPU.Build.0 = Release|Any CPU
+		{34FAF9CA-1007-4984-BC0B-C52545B3F1AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{34FAF9CA-1007-4984-BC0B-C52545B3F1AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{34FAF9CA-1007-4984-BC0B-C52545B3F1AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{34FAF9CA-1007-4984-BC0B-C52545B3F1AD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
