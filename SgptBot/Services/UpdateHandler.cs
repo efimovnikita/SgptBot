@@ -266,16 +266,19 @@ public class UpdateHandler : IUpdateHandler
     private async Task<Message> SendInfoAboutAvailableMemories(Message message,
         StoreUser storeUser, CancellationToken cancellationToken)
     {
-        string availableMemories = String.Join("\n", storeUser.MemoryStorage.Select(item => $"`{item.MemoryId}`").ToArray());
+        string availableMemories = String.Join("\n", storeUser.MemoryStorage.Select(item => $"- `{item.MemoryId}`").ToArray());
         string currentWorkingMemoryItems =
-            String.Join("\n", storeUser.WorkingMemory.Select(item => $"`{item.MemoryId}`").ToArray());
+            String.Join("\n", storeUser.WorkingMemory.Select(item => $"- `{item.MemoryId}`").ToArray());
 
         return await SendBotResponseDependingOnMsgLength(msg: $"""
-                                                        *Available memories:*
+                                                        You can add a memory by uploading a text file (.txt, .md or .zip archive with text files) to the bot. 
+                                                        Remember — you must use 'Context Filter' mode.
+                                                        
+                                                        *Available memories ({"item".ToQuantity(storeUser.MemoryStorage.Count)}):*
 
                                                         {availableMemories}
 
-                                                        *Current working memory items:*
+                                                        *Current working memory items ({"item".ToQuantity(storeUser.WorkingMemory.Count)}):*
 
                                                         {(currentWorkingMemoryItems.Length > 0 ? currentWorkingMemoryItems : "_...empty..._")}
                                                         """,
