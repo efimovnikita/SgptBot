@@ -238,6 +238,8 @@ public class UpdateHandler : IUpdateHandler
             .Split(',', StringSplitOptions.RemoveEmptyEntries)
             .Select(name => name.Trim()).ToArray();
         
+        storeUser.WorkingMemory.Clear();
+        
         foreach (string name in individualNames)
         {
             VectorMemoryItem? memoryItem = storeUser.MemoryStorage.FirstOrDefault(item => item.MemoryId == name);
@@ -252,8 +254,9 @@ public class UpdateHandler : IUpdateHandler
             }
 
             storeUser.WorkingMemory.Add(memoryItem);
-            _userRepository.UpdateUser(storeUser);
         }
+        
+        _userRepository.UpdateUser(storeUser);
         
         return await SendInfoAboutAvailableMemories(message, cancellationToken, storeUser);
     }
