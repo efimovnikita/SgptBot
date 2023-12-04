@@ -161,13 +161,120 @@ public class UpdateHandler : IUpdateHandler
             "/toggle_img_quality"    => ToggleImgQualityCommand(_botClient, message, cancellationToken),
             "/toggle_img_style"      => ToggleImgStyleCommand(_botClient, message, cancellationToken),
             "/toggle_anew_mode"      => ToggleAnewMode(_botClient, message, cancellationToken),
-            "/toggle_context_filter_mode" => ToggleContextFilterMode(message, cancellationToken),
+            "/toggle_context_filter_mode" => ToggleContextFilterModeCommand(message, cancellationToken),
+            "/select_memory"         => SelectMemoryCommand(message, cancellationToken),
+            "/clear_working_memory"  => ClearWorkingMemoryCommand(message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ClearWorkingMemoryCommand(Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (await ValidateUser(storeUser, _botClient, message.Chat.Id) == false)
+        {
+            return await _botClient.SendTextMessageAsync(message.Chat.Id,
+                "Error: User validation failed.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser!.ContextFilterMode == false)
+        {
+            return await _botClient.SendTextMessageAsync(message.Chat.Id,
+                "In order to clear the working memory, please active the context filter mode (use '/toggle_context_filter_mode' command)",
+                cancellationToken: cancellationToken);
+        }
+        
+        storeUser.WorkingMemory.Clear();
+        _userRepository.UpdateUser(storeUser);
+        
+        return await _botClient.SendTextMessageAsync(message.Chat.Id,
+            "Working memory was cleared.",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> SelectMemoryCommand(Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (await ValidateUser(storeUser, _botClient, message.Chat.Id) == false)
+        {
+            return await _botClient.SendTextMessageAsync(message.Chat.Id,
+                "Error: User validation failed.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser!.ContextFilterMode == false)
+        {
+            return await _botClient.SendTextMessageAsync(message.Chat.Id,
+                "In order to select the memory, please active the context filter mode (use '/toggle_context_filter_mode' command)",
+                cancellationToken: cancellationToken);
+        }
+        
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            await SendInfoAboutAvailableMemories(message, cancellationToken, storeUser);
+
+            return await _botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/select_memory' command you must input the memory name (or multiple names, separated by comma). Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string contextNames = String.Join(' ', strings.Skip(1));
+        if (String.IsNullOrWhiteSpace(contextNames))
+        {
+            await SendInfoAboutAvailableMemories(message, cancellationToken, storeUser);
+
+            return await _botClient.SendTextMessageAsync(message.Chat.Id,
+                "After the '/select_memory' command you must input the memory name (or multiple names, separated by comma). Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string[] individualNames = contextNames
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(name => name.Trim()).ToArray();
+        
+        foreach (string name in individualNames)
+        {
+            VectorMemoryItem? memoryItem = storeUser.MemoryStorage.FirstOrDefault(item => item.MemoryId == name);
+            if (memoryItem == null)
+            {
+                continue;
+            }
+
+            if (storeUser.WorkingMemory.FirstOrDefault(item => item.MemoryId == name) != null)
+            {
+                continue;
+            }
+
+            storeUser.WorkingMemory.Add(memoryItem);
+            _userRepository.UpdateUser(storeUser);
+        }
+        
+        return await SendInfoAboutAvailableMemories(message, cancellationToken, storeUser);
+    }
+
+    private async Task<Message> SendInfoAboutAvailableMemories(Message message, CancellationToken cancellationToken,
+        StoreUser storeUser)
+    {
+        string availableMemories = String.Join("\n", storeUser.MemoryStorage.Select(item => $"`{item.MemoryId}`").ToArray());
+        string currentWorkingMemoryItems =
+            String.Join("\n", storeUser.WorkingMemory.Select(item => $"`{item.MemoryId}`").ToArray());
+
+        return await SendBotResponseDependingOnMsgLength(msg: $"""
+                                                        Available memories:
+
+                                                        {availableMemories}
+
+                                                        Current working memory items:
+
+                                                        {(currentWorkingMemoryItems.Length > 0 ? currentWorkingMemoryItems : "_...empty..._")}
+                                                        """,
+            _botClient, message.Chat.Id, storeUser.Id, cancellationToken, parseMode: ParseMode.Markdown);
     }
 
     private async Task StoreNewMemory(Message message, StoreUser storeUser, string? textFromDocumentMessage)
@@ -184,6 +291,7 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task<string> EnrichUserPromptWithRelevantContext(StoreUser? storeUser, string userPrompt)
     {
+        if (userPrompt.StartsWith('/')) return userPrompt;
         if (storeUser == null) return userPrompt;
         if (storeUser.Model is not (Model.Gpt3 or Model.Gpt4)) return userPrompt;
         if (String.IsNullOrWhiteSpace(storeUser.ApiKey)) return userPrompt;
@@ -204,7 +312,7 @@ public class UpdateHandler : IUpdateHandler
             : userPrompt;
     }
 
-    private async Task<Message> ToggleContextFilterMode(Message message, CancellationToken cancellationToken)
+    private async Task<Message> ToggleContextFilterModeCommand(Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
         if (await ValidateUser(storeUser, _botClient, message.Chat.Id) == false)
@@ -2013,6 +2121,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/toggle_img_style - switch between vivid or natural image style\n" +
                        "/toggle_anew_mode - switch on or off 'anew' mode. With this mode you can start each conversation from the beginning without relying on previous history\n" +
                        "/toggle_context_filter_mode - switch on or off 'context filter' mode. This mode simplifies interactions by narrowing down the context to just the essential parts for quick and clear communication\n" +
+                       "/select_memory - add previously uploaded memory into the working memory. Works only with the 'context filter' mode\n" +
+                       "/clear_working_memory - clear current working memory. Works only with the 'context filter' mode\n" +
                        "/image - generate an image with help of DALL·E 3\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
