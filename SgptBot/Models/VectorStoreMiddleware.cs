@@ -9,12 +9,19 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
 {
     private readonly HttpClient _client;
     private readonly string _api;
+    private readonly int _maxTokensPerLine;
+    private readonly int _maxTokensPerParagraph;
+    private readonly int _overlapTokens;
     private readonly ILogger<VectorStoreMiddleware> _logger;
     
-    public VectorStoreMiddleware(HttpClient httpClient, string api, ILogger<VectorStoreMiddleware> logger)
+    public VectorStoreMiddleware(HttpClient httpClient, string api, int maxTokensPerLine, int maxTokensPerParagraph,
+        int overlapTokens, ILogger<VectorStoreMiddleware> logger)
     {
         _client = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _api = api ?? throw new ArgumentNullException(nameof(api));
+        _maxTokensPerLine = maxTokensPerLine;
+        _maxTokensPerParagraph = maxTokensPerParagraph;
+        _overlapTokens = overlapTokens;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -85,7 +92,9 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
                 MemoryId = fileName,
                 UserId = user.Id.ToString(),
                 Memory = memories,
-                MaxTokensPerParagraph = 250
+                MaxTokensPerLine = _maxTokensPerLine,
+                MaxTokensPerParagraph = _maxTokensPerParagraph,
+                OverlapTokens = _overlapTokens
             };
             
             string jsonRepresentation = JsonConvert.SerializeObject(memoryInput);

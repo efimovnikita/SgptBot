@@ -68,6 +68,28 @@ IHost host = Host.CreateDefaultBuilder(args)
             throw new ArgumentNullException(nameof(vectorStoreApi), "Environment variable VECTORSTOREAPI is not set.");
         }
 
+        string? maxTokensPerLineStr = Environment.GetEnvironmentVariable("MAX_TOKENS_PER_LINE");
+        if (String.IsNullOrWhiteSpace(maxTokensPerLineStr))
+        {
+            throw new ArgumentNullException(nameof(maxTokensPerLineStr), "Environment variable MAX_TOKENS_PER_LINE is not set.");
+        }
+
+        string? maxTokensPerParagraphStr = Environment.GetEnvironmentVariable("MAX_TOKENS_PER_PARAGRAPH");
+        if (String.IsNullOrWhiteSpace(maxTokensPerParagraphStr))
+        {
+            throw new ArgumentNullException(nameof(maxTokensPerParagraphStr), "Environment variable MAX_TOKENS_PER_PARAGRAPH is not set.");
+        }
+
+        string? overlapTokensStr = Environment.GetEnvironmentVariable("OVERLAP_TOKENS");
+        if (String.IsNullOrWhiteSpace(overlapTokensStr))
+        {
+            throw new ArgumentNullException(nameof(overlapTokensStr), "Environment variable OVERLAP_TOKENS is not set.");
+        }
+
+        int maxTokensPerLine = Int32.Parse(maxTokensPerLineStr);
+        int maxTokensPerParagraph = Int32.Parse(maxTokensPerParagraphStr);
+        int overlapTokens = Int32.Parse(overlapTokensStr);
+
         services.AddHttpClient("telegram_bot_client")
             .AddTypedClient<ITelegramBotClient>((httpClient, _) =>
             {
@@ -94,7 +116,7 @@ IHost host = Host.CreateDefaultBuilder(args)
             HttpClient httpClient = new();
             httpClient.Timeout = TimeSpan.FromMinutes(5);
             ILogger<VectorStoreMiddleware> logger = serviceProvider.GetRequiredService<ILogger<VectorStoreMiddleware>>();
-            return new VectorStoreMiddleware(httpClient, vectorStoreApi, logger);
+            return new VectorStoreMiddleware(httpClient, vectorStoreApi, maxTokensPerLine, maxTokensPerParagraph, overlapTokens, logger);
         });
         
         services.AddScoped<UpdateHandler>();
