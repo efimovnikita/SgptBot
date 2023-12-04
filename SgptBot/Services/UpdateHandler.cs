@@ -192,6 +192,8 @@ public class UpdateHandler : IUpdateHandler
         storeUser.WorkingMemory.Clear();
         _userRepository.UpdateUser(storeUser);
         
+        await SendInfoAboutAvailableMemories(message, storeUser, cancellationToken);
+        
         return await _botClient.SendTextMessageAsync(message.Chat.Id,
             "Working memory was cleared.",
             cancellationToken: cancellationToken);
@@ -217,7 +219,7 @@ public class UpdateHandler : IUpdateHandler
         string[] strings = message.Text!.Split(' ');
         if (strings.Length < 2)
         {
-            await SendInfoAboutAvailableMemories(message, cancellationToken, storeUser);
+            await SendInfoAboutAvailableMemories(message, storeUser, cancellationToken);
 
             return await _botClient.SendTextMessageAsync(message.Chat.Id,
                 "After the '/select_memory' command you must input the memory name (or multiple names, separated by comma). Try again.",
@@ -227,7 +229,7 @@ public class UpdateHandler : IUpdateHandler
         string contextNames = String.Join(' ', strings.Skip(1));
         if (String.IsNullOrWhiteSpace(contextNames))
         {
-            await SendInfoAboutAvailableMemories(message, cancellationToken, storeUser);
+            await SendInfoAboutAvailableMemories(message, storeUser, cancellationToken);
 
             return await _botClient.SendTextMessageAsync(message.Chat.Id,
                 "After the '/select_memory' command you must input the memory name (or multiple names, separated by comma). Try again.",
@@ -258,11 +260,11 @@ public class UpdateHandler : IUpdateHandler
         
         _userRepository.UpdateUser(storeUser);
         
-        return await SendInfoAboutAvailableMemories(message, cancellationToken, storeUser);
+        return await SendInfoAboutAvailableMemories(message, storeUser, cancellationToken);
     }
 
-    private async Task<Message> SendInfoAboutAvailableMemories(Message message, CancellationToken cancellationToken,
-        StoreUser storeUser)
+    private async Task<Message> SendInfoAboutAvailableMemories(Message message,
+        StoreUser storeUser, CancellationToken cancellationToken)
     {
         string availableMemories = String.Join("\n", storeUser.MemoryStorage.Select(item => $"`{item.MemoryId}`").ToArray());
         string currentWorkingMemoryItems =
