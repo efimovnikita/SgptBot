@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using SgptBot.Models;
 using SgptBot.Services;
 using Telegram.Bot;
@@ -88,10 +89,12 @@ IHost host = Host.CreateDefaultBuilder(args)
             return new YoutubeTextProcessorMiddleware(httpClient, youtubeApi);
         });
 
-        services.AddSingleton<IVectorStoreMiddleware>(_ =>
+        services.AddSingleton<IVectorStoreMiddleware>(serviceProvider =>
         {
             HttpClient httpClient = new();
-            return new VectorStoreMiddleware(httpClient, vectorStoreApi);
+            httpClient.Timeout = TimeSpan.FromMinutes(5);
+            ILogger<VectorStoreMiddleware> logger = serviceProvider.GetRequiredService<ILogger<VectorStoreMiddleware>>();
+            return new VectorStoreMiddleware(httpClient, vectorStoreApi, logger);
         });
         
         services.AddScoped<UpdateHandler>();
@@ -101,19 +104,3 @@ IHost host = Host.CreateDefaultBuilder(args)
     .Build();
 
 await host.RunAsync();
-
-public class VectorStoreMiddleware : IVectorStoreMiddleware
-{
-    private readonly HttpClient _httpClient;
-    private readonly string _vectorStoreApi;
-
-    public VectorStoreMiddleware(HttpClient httpClient, string vectorStoreApi)
-    {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));;
-        _vectorStoreApi = vectorStoreApi ?? throw new ArgumentNullException(nameof(vectorStoreApi));;
-    }
-}
-
-public interface IVectorStoreMiddleware
-{
-}

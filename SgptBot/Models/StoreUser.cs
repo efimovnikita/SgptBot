@@ -1,4 +1,5 @@
 using LiteDB;
+using SgptBot.Shared.Models;
 
 namespace SgptBot.Models;
 
@@ -38,6 +39,8 @@ public class StoreUser
     public string ClaudeApiKey { get; set; }
     public List<Message> History { get; set; } = [];
     public bool ContextFilterMode { get; set; }
+    public List<VectorMemoryItem> MemoryStorage { get; set; } = [];
+    public List<VectorMemoryItem> WorkingMemory { get; set; } = [];
 
     public override string ToString()
     {

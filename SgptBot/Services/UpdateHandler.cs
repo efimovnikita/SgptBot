@@ -12,6 +12,7 @@ using OpenAiNg.Chat;
 using OpenAiNg.ChatFunctions;
 using OpenAiNg.Images;
 using SgptBot.Models;
+using SgptBot.Shared.Models;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
@@ -109,12 +110,26 @@ public class UpdateHandler : IUpdateHandler
             messageText = await GetTranscriptionTextFromVoiceMessage(message, client, cancellationToken);
         }
         
+        StoreUser? storeUser = GetStoreUser(message.From);
+        
         if (messageText == null && messageType == MessageType.Document)
         {
-            messageText = await GetTextFromDocumentMessage(message, client, cancellationToken);
+            string? textFromDocumentMessage = await GetTextFromDocumentMessage(message, client, cancellationToken);
+            if (storeUser is {ContextFilterMode: false})
+            {
+                messageText = textFromDocumentMessage + (String.IsNullOrEmpty(message.Caption) == false
+                    ? $"\n{message.Caption}"
+                    : String.Empty);
+            }
+            
+            if (storeUser is {ContextFilterMode: true})
+            {
+                await StoreNewMemory(message, storeUser, textFromDocumentMessage);
+                messageText = message.Caption ?? "";
+            }
         }
 
-        if (String.IsNullOrEmpty(messageText))
+        if (String.IsNullOrWhiteSpace(messageText))
         {
             await client.SendTextMessageAsync(message.Chat.Id,
                 "Your message was empty. Try again.",
@@ -122,6 +137,8 @@ public class UpdateHandler : IUpdateHandler
             _logger.LogWarning("[{MethodName}] Message is empty. Return.", nameof(BotOnMessageReceived));
             return;
         }
+
+        messageText = await EnrichUserPromptWithRelevantContext(storeUser, messageText);
 
         Task<Message> action = messageText.Split(' ')[0] switch
         {
@@ -151,6 +168,40 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task StoreNewMemory(Message message, StoreUser storeUser, string? textFromDocumentMessage)
+    {
+        VectorMemoryItem? memoryItem = await _vectorStoreMiddleware.Memorize(storeUser, textFromDocumentMessage,
+            message.Document!.FileName);
+        if (memoryItem != null)
+        {
+            storeUser.MemoryStorage.Add(memoryItem);
+            storeUser.WorkingMemory = [memoryItem];
+            _userRepository.UpdateUser(storeUser);
+        }
+    }
+
+    private async Task<string> EnrichUserPromptWithRelevantContext(StoreUser? storeUser, string userPrompt)
+    {
+        if (storeUser == null) return userPrompt;
+        if (storeUser.Model is not (Model.Gpt3 or Model.Gpt4)) return userPrompt;
+        if (String.IsNullOrWhiteSpace(storeUser.ApiKey)) return userPrompt;
+        if (storeUser is not {ContextFilterMode: true, WorkingMemory.Count: > 0}) return userPrompt;
+        string[] context =
+            await _vectorStoreMiddleware.RecallMemoryFromVectorContext(storeUser, userPrompt);
+        return context.Length > 0
+            ? $"""
+               This is additional context. Use this to create a high-quality answer.
+               This context may be irrelevant. If the context is irrelevant, simply disregard it.
+
+               ADDITIONAL CONTEXT START
+               {String.Join("\n", context)}
+               ADDITIONAL CONTEXT END
+
+               Question: {userPrompt}
+               """
+            : userPrompt;
     }
 
     private async Task<Message> ToggleContextFilterMode(Message message, CancellationToken cancellationToken)
@@ -319,11 +370,6 @@ public class UpdateHandler : IUpdateHandler
             string text = extension == ".zip"
                 ? await GetTextFromFilesInsideZipArchive(fullDocumentFileName, cancellationToken)
                 : await System.IO.File.ReadAllTextAsync(fullDocumentFileName, cancellationToken);
-
-            if (String.IsNullOrEmpty(message.Caption) == false)
-            {
-                text += $"\n{message.Caption}";
-            }
             
             return text;
         }
