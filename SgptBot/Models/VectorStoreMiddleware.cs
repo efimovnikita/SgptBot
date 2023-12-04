@@ -85,7 +85,7 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
                 MemoryId = fileName,
                 UserId = user.Id.ToString(),
                 Memory = memories,
-                MaxTokensPerParagraph = 300
+                MaxTokensPerParagraph = 250
             };
             
             string jsonRepresentation = JsonConvert.SerializeObject(memoryInput);
