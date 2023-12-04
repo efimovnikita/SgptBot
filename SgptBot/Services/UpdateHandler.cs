@@ -266,11 +266,11 @@ public class UpdateHandler : IUpdateHandler
             String.Join("\n", storeUser.WorkingMemory.Select(item => $"`{item.MemoryId}`").ToArray());
 
         return await SendBotResponseDependingOnMsgLength(msg: $"""
-                                                        Available memories:
+                                                        *Available memories:*
 
                                                         {availableMemories}
 
-                                                        Current working memory items:
+                                                        *Current working memory items:*
 
                                                         {(currentWorkingMemoryItems.Length > 0 ? currentWorkingMemoryItems : "_...empty..._")}
                                                         """,
