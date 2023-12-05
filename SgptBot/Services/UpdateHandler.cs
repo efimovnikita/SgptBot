@@ -276,7 +276,7 @@ public class UpdateHandler : IUpdateHandler
                                                         
                                                         *Available memories ({"item".ToQuantity(storeUser.MemoryStorage.Count)}):*
 
-                                                        {availableMemories}
+                                                        {(availableMemories.Length > 0 ? availableMemories : "_...empty..._")}
 
                                                         *Current working memory items ({"item".ToQuantity(storeUser.WorkingMemory.Count)}):*
 
