@@ -47,6 +47,7 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
             if (cachedResponseAsync != null)
             {
                 string[]? results = JsonConvert.DeserializeObject<string[]>(cachedResponseAsync);
+                _logger.LogInformation("Restore data from cache");
                 return results ?? [];
             }
             
@@ -67,7 +68,8 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
             if (String.IsNullOrWhiteSpace(responseStr) == false)
             {
                 // store to cache
-                await _cacheService.SaveResponseInCacheAsync(cacheKey, responseStr, TimeSpan.FromMinutes(2));
+                _logger.LogInformation("Save data to cache");
+                await _cacheService.SaveResponseInCacheAsync(cacheKey, responseStr, TimeSpan.FromDays(1));
             }
             
             string[]? memoryResults = JsonConvert.DeserializeObject<string[]>(responseStr);
