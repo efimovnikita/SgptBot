@@ -90,6 +90,12 @@ IHost host = Host.CreateDefaultBuilder(args)
         int maxTokensPerParagraph = Int32.Parse(maxTokensPerParagraphStr);
         int overlapTokens = Int32.Parse(overlapTokensStr);
 
+        string? redisServer = Environment.GetEnvironmentVariable("REDIS_SERVER");
+        if (String.IsNullOrWhiteSpace(redisServer))
+        {
+            throw new ArgumentNullException(nameof(redisServer), "Environment variable REDIS_SERVER is not set.");
+        }
+
         services.AddHttpClient("telegram_bot_client")
             .AddTypedClient<ITelegramBotClient>((httpClient, _) =>
             {
@@ -110,13 +116,16 @@ IHost host = Host.CreateDefaultBuilder(args)
             httpClient.Timeout = TimeSpan.FromMinutes(5);
             return new YoutubeTextProcessorMiddleware(httpClient, youtubeApi);
         });
+        
+        services.AddSingleton<IRedisCacheService>(_ => new RedisCacheService(redisServer));
 
         services.AddSingleton<IVectorStoreMiddleware>(serviceProvider =>
         {
             HttpClient httpClient = new();
             httpClient.Timeout = TimeSpan.FromMinutes(5);
             ILogger<VectorStoreMiddleware> logger = serviceProvider.GetRequiredService<ILogger<VectorStoreMiddleware>>();
-            return new VectorStoreMiddleware(httpClient, vectorStoreApi, maxTokensPerLine, maxTokensPerParagraph, overlapTokens, logger);
+            IRedisCacheService redisCacheService = serviceProvider.GetRequiredService<IRedisCacheService>();
+            return new VectorStoreMiddleware(httpClient, vectorStoreApi, maxTokensPerLine, maxTokensPerParagraph, overlapTokens, logger, redisCacheService);
         });
         
         services.AddScoped<UpdateHandler>();

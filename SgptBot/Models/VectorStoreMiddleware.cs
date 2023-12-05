@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -12,10 +13,11 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
     private readonly int _maxTokensPerLine;
     private readonly int _maxTokensPerParagraph;
     private readonly int _overlapTokens;
+    private readonly IRedisCacheService _cacheService;
     private readonly ILogger<VectorStoreMiddleware> _logger;
     
     public VectorStoreMiddleware(HttpClient httpClient, string api, int maxTokensPerLine, int maxTokensPerParagraph,
-        int overlapTokens, ILogger<VectorStoreMiddleware> logger)
+        int overlapTokens, ILogger<VectorStoreMiddleware> logger, IRedisCacheService cacheService)
     {
         _client = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _api = api ?? throw new ArgumentNullException(nameof(api));
@@ -23,6 +25,7 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
         _maxTokensPerParagraph = maxTokensPerParagraph;
         _overlapTokens = overlapTokens;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _cacheService = cacheService;
     }
 
     public async Task<string[]> RecallMemoryFromVectorContext(StoreUser user, string prompt)
@@ -35,8 +38,18 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
             MemoryIds = user.WorkingMemory.Select(item => item.MemoryId).ToArray(),
         };
 
+        string cacheKey = GetCacheKey(searchDto);
+
         try
         {
+            string? cachedResponseAsync = await _cacheService.GetCachedResponseAsync(cacheKey);
+            
+            if (cachedResponseAsync != null)
+            {
+                string[]? results = JsonConvert.DeserializeObject<string[]>(cachedResponseAsync);
+                return results ?? [];
+            }
+            
             _logger.LogInformation("Starting memory recall for user {UserId} with prompt: {Prompt}", user.Id, prompt);
             string jsonRepresentation = JsonConvert.SerializeObject(searchDto);
         
@@ -50,6 +63,13 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
             }
         
             string responseStr = await response.Content.ReadAsStringAsync();
+            
+            if (String.IsNullOrWhiteSpace(responseStr) == false)
+            {
+                // store to cache
+                await _cacheService.SaveResponseInCacheAsync(cacheKey, responseStr, TimeSpan.FromMinutes(2));
+            }
+            
             string[]? memoryResults = JsonConvert.DeserializeObject<string[]>(responseStr);
             _logger.LogInformation("Memory recall succeeded with {Count} results for user {UserId}", memoryResults?.Length, user.Id);
             return memoryResults ?? [];
@@ -60,6 +80,21 @@ public class VectorStoreMiddleware : IVectorStoreMiddleware
             return [];
         }
     }
+
+    private static string GenerateSha256Hash(string input)
+    {
+        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+
+        StringBuilder builder = new StringBuilder();
+        foreach (byte t in bytes)
+        {
+            builder.Append(t.ToString("x2"));
+        }
+        return builder.ToString();
+    }
+
+    private static string GetCacheKey(MemorySearchDto searchDto) => 
+        GenerateSha256Hash(searchDto.Key + searchDto.Prompt + searchDto.UserId);
 
     public async Task<VectorMemoryItem?> Memorize(StoreUser user, string? memories, string? fileName)
     {
