@@ -331,11 +331,13 @@ public class UpdateHandler : IUpdateHandler
         }
 
         storeUser!.ContextFilterMode = !storeUser.ContextFilterMode;
+        storeUser.AnewMode = storeUser.ContextFilterMode;
+        
         _userRepository.UpdateUser(storeUser);
         
         return await _botClient.SendTextMessageAsync(message.Chat.Id, 
-            $"Context filter mode is: {(storeUser.ContextFilterMode ? "On" : "Off")}\n\nTurn on the 'Context Filter' mode, and the bot will keep conversations simple and to the point. This mode makes the bot act like a filter, picking out only the most important parts of what you say. It helps avoid confusion by ignoring the bits that aren't needed for understanding. With this mode, the bot's answers are clear and focused, making sure you get the information you need quickly and easily.",
-            cancellationToken: cancellationToken);
+            $"Context filter mode is: {(storeUser.ContextFilterMode ? "`on`" : "`off`")}\nAnew mode is: {(storeUser.AnewMode ? "`on`" : "`off`")}\n\nTurn on the 'Context Filter' mode, and the bot will keep conversations simple and to the point. This mode makes the bot act like a filter, picking out only the most important parts of what you say. It helps avoid confusion by ignoring the bits that aren't needed for understanding. With this mode, the bot's answers are clear and focused, making sure you get the information you need quickly and easily.",
+            cancellationToken: cancellationToken, parseMode: ParseMode.Markdown);
     }
 
     private async Task<Message> ContactCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -1642,13 +1644,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"OpenAI API key: `{storeUser.ApiKey}`\n" +
             $"Claude API key: `{storeUser.ClaudeApiKey}`\n" +
             $"Model: `{mName}`\n" +
-            $"Voice mode: `{(storeUser.VoiceMode ? "on" : "off")}`\n" +
-            $"Anew mode: `{(storeUser.AnewMode ? "on" : "off")}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
             $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
+            $"Voice mode: `{(storeUser.VoiceMode ? "on" : "off")}`\n" +
             $"Context filter mode: `{(storeUser.ContextFilterMode ? "on" : "off" )}`\n" +
+            $"Anew mode: `{(storeUser.AnewMode ? "on" : "off")}`\n" +
             $"Current context window size (number of tokens): `{tokenCount}`\n" +
-            $"Context prompt: `{storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? ""}`",
+            $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? "_<empty>_"}",
             parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
     }
