@@ -15,11 +15,6 @@ public class YoutubeTextProcessorMiddleware : IYoutubeTextProcessor
     {
         try
         {
-            if (IsUrlFromYouTube(inputText) == false)
-            {
-                return inputText;
-            }
-            
             // Input might contains some garbage
             string[] strings = inputText.Split(' ');
             string url = strings[0];
@@ -33,11 +28,5 @@ public class YoutubeTextProcessorMiddleware : IYoutubeTextProcessor
         {
             return inputText;
         }
-    }
-
-    private static bool IsUrlFromYouTube(string url)
-    {
-        Uri uri = new(url);
-        return uri.Host.Contains("youtu.be") || uri.Host.Contains("youtube.com");
     }
 }
