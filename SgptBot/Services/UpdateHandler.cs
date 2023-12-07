@@ -1257,7 +1257,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     private async Task<Message> AboutCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         return await botClient.SendTextMessageAsync(message.Chat.Id,
-            "This bot allows you to talk with OpenAI GPT LLM's.",
+            "This bot allows you to use different LLM models in order to receive useful information from them.",
             cancellationToken: cancellationToken);
     }
 
