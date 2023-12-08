@@ -57,6 +57,9 @@ public class SummarizationProvider : ISummarizationProvider
             {
                 FunctionResult functionResult = await kernel.InvokeAsync(summarize, new KernelArguments(paragraph));
                 stringBuilder.AppendLine(functionResult.ToString());
+                _logger.LogInformation(
+                    message: "The paragraph with length '{ParagraphLength}' was processed. The summary length is '{Length}'...",
+                    args: new object?[] {paragraph.Length, functionResult.ToString().Length});
             }
 
             _logger.LogInformation("Successfully generated summary");
