@@ -1794,7 +1794,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         
         _logger.LogInformation("Received response message from model.");
         
-        storeUser.Conversation.Add(new Models.Message(Role.User, messageText, DateOnly.FromDateTime(DateTime.Today)));
         storeUser.Conversation.Add(new Models.Message(Role.Ai, response, DateOnly.FromDateTime(DateTime.Today)));
 
         if (storeUser.AnewMode == false)
@@ -1825,6 +1824,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     private async Task<string> GetResponseFromAnthropicModel(ITelegramBotClient client, StoreUser storeUser,
         Message message, string messageText, CancellationToken cancellationToken)
     {
+        storeUser.Conversation.Add(new Models.Message(Role.User, messageText, DateOnly.FromDateTime(DateTime.Today)));
+
         string prompt = PreparePromptForClaude(storeUser, messageText);
 
         string response = await PostToClaudeApiAsync(prompt, storeUser.ClaudeApiKey, client, message, storeUser,
@@ -1946,9 +1947,11 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             chatMessages.Add(new ChatMessage(msg.Role == Role.Ai ? ChatMessageRole.Assistant : ChatMessageRole.User, msg.Msg));
         }
 
-        messageText = await ProcessYoutubeUrlIfPresent(messageText, client, message.Chat.Id, storeUser, cancellationToken);
+        messageText = await ProcessUrlIfPresent(messageText, client, message.Chat.Id, storeUser, cancellationToken);
         
         chatMessages.Add(new ChatMessage(ChatMessageRole.User, messageText));
+        
+        storeUser.Conversation.Add(new Models.Message(Role.User, messageText, DateOnly.FromDateTime(DateTime.Today)));
 
         ChatRequest request = new()
         {
@@ -1977,7 +1980,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return response;
     }
 
-    private async Task<string> ProcessYoutubeUrlIfPresent(string messageText,
+    private async Task<string> ProcessUrlIfPresent(string messageText,
         ITelegramBotClient botClient, long chatId, StoreUser storeUser,
         CancellationToken cancellationToken)
     {
