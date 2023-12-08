@@ -127,6 +127,12 @@ IHost host = Host.CreateDefaultBuilder(args)
             IRedisCacheService redisCacheService = serviceProvider.GetRequiredService<IRedisCacheService>();
             return new VectorStoreMiddleware(httpClient, vectorStoreApi, maxTokensPerLine, maxTokensPerParagraph, overlapTokens, logger, redisCacheService);
         });
+
+        services.AddSingleton<ISummarizationProvider>(serviceProvider =>
+        {
+            ILogger<SummarizationProvider> logger = serviceProvider.GetRequiredService<ILogger<SummarizationProvider>>();
+            return new SummarizationProvider(maxTokensPerLine, maxTokensPerParagraph, overlapTokens, logger);
+        });
         
         services.AddScoped<UpdateHandler>();
         services.AddScoped<ReceiverService>();
