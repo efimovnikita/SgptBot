@@ -52,18 +52,25 @@ public class SummarizationProvider : ISummarizationProvider
             KernelFunction summarize = kernel.CreateFunctionFromPrompt(promptTemplate: promptTemplate,
                 executionSettings: new OpenAIPromptExecutionSettings {MaxTokens = 150});
 
-            StringBuilder stringBuilder = new();
-            foreach (string paragraph in paragraphs)
+            List<Task<string>> summaryTasks = paragraphs.Select(async paragraph =>
             {
                 FunctionResult functionResult = await kernel.InvokeAsync(summarize, new KernelArguments(paragraph));
-                stringBuilder.AppendLine(functionResult.ToString());
                 _logger.LogInformation(
                     message: "The paragraph with length '{ParagraphLength}' was processed. The summary length is '{Length}'...",
                     args: new object?[] {paragraph.Length, functionResult.ToString().Length});
-            }
+                return functionResult.ToString();
+            }).ToList();
+
+            string[] results = await Task.WhenAll(summaryTasks);
 
             _logger.LogInformation("Successfully generated summary");
-        
+
+            StringBuilder stringBuilder = new();
+            foreach (string result in results)
+            {
+                stringBuilder.AppendLine(result);
+            }
+
             return stringBuilder.ToString();
         }
         catch (Exception ex)
