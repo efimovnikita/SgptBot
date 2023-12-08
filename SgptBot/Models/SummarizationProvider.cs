@@ -30,7 +30,7 @@ public class SummarizationProvider : ISummarizationProvider
         try
         {
             KernelBuilder builder = new();
-            builder.AddOpenAIChatCompletion(storeUserModel == Model.Gpt3 ? "gpt-3.5-turbo-1106" : "gpt4-1106-preview", key);
+            builder.AddOpenAIChatCompletion(storeUserModel == Model.Gpt3 ? "gpt-3.5-turbo-1106" : "gpt-4-1106-preview", key);
 
             Kernel kernel = builder.Build();
     
