@@ -44,7 +44,7 @@ public class SummarizationProvider : ISummarizationProvider
             _logger.LogInformation("Split text into {ParagraphCount} paragraphs", paragraphs.Length);
     
             const string promptTemplate = """
-                                          Create a summary capturing the main points and key details of:
+                                          Create a summary (using a simple vocabulary) capturing the main points and key details of:
 
                                           {{$input}}
                                           """;
