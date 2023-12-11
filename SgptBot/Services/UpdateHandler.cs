@@ -126,16 +126,21 @@ public class UpdateHandler : IUpdateHandler
             
             if (storeUser is {ContextFilterMode: true})
             {
-                await StoreNewMemory(message, storeUser, textFromDocumentMessage);
+                await StoreNewMemory(storeUser, textFromDocumentMessage, message.Document!.FileName);
                 messageText = message.Caption ?? "";
             }
         }
-        
-        messageText = await ProcessUrlIfPresent(messageText: messageText ?? String.Empty,
+
+        string processedMsg = await ProcessUrlIfPresent(messageText: messageText ?? String.Empty,
             botClient: client,
             chatId: message.Chat.Id,
             storeUser: storeUser!,
             cancellationToken: cancellationToken);
+        
+        if (await StoreUrlTranscriptInMemory(message, client, cancellationToken, processedMsg, messageText,
+                storeUser)) return;
+        
+        messageText = processedMsg;
 
         if (String.IsNullOrWhiteSpace(messageText))
         {
@@ -179,6 +184,20 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<bool> StoreUrlTranscriptInMemory(Message message, ITelegramBotClient client,
+        CancellationToken cancellationToken, string processedMsg, string? messageText, StoreUser? storeUser)
+    {
+        if (processedMsg.Equals(messageText, StringComparison.OrdinalIgnoreCase) ||
+            processedMsg.Length <= messageText!.Length || !storeUser!.ContextFilterMode) return false;
+        
+        await StoreNewMemory(storeUser, processedMsg, $"Url_{Guid.NewGuid()}");
+        await client.SendTextMessageAsync(message.Chat.Id,
+            "The transcript form the url was stored in the memory.",
+            cancellationToken: cancellationToken);
+        
+        return true;
     }
 
     private async Task<Message> SummarizeCommand(Message message, CancellationToken cancellationToken)
@@ -332,10 +351,11 @@ public class UpdateHandler : IUpdateHandler
             _botClient, message.Chat.Id, storeUser.Id, cancellationToken, parseMode: ParseMode.Markdown);
     }
 
-    private async Task StoreNewMemory(Message message, StoreUser storeUser, string? textFromDocumentMessage)
+    private async Task StoreNewMemory(StoreUser storeUser, string? text, string? fileName)
     {
-        VectorMemoryItem? memoryItem = await _vectorStoreMiddleware.Memorize(storeUser, textFromDocumentMessage,
-            message.Document!.FileName);
+        VectorMemoryItem? memoryItem = await _vectorStoreMiddleware.Memorize(user: storeUser,
+            memories: text,
+            fileName: fileName);
         if (memoryItem != null)
         {
             storeUser.MemoryStorage.Add(memoryItem);
@@ -1983,7 +2003,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     {
         if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
         {
-            return "";
+            return messageText;
         }
         
         string transcriptFromLink = await _youtubeTextProcessor.ProcessTextAsync(messageText, storeUser.ApiKey);
