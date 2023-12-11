@@ -130,6 +130,12 @@ public class UpdateHandler : IUpdateHandler
                 messageText = message.Caption ?? "";
             }
         }
+        
+        messageText = await ProcessUrlIfPresent(messageText: messageText ?? String.Empty,
+            botClient: client,
+            chatId: message.Chat.Id,
+            storeUser: storeUser!,
+            cancellationToken: cancellationToken);
 
         if (String.IsNullOrWhiteSpace(messageText))
         {
@@ -1794,12 +1800,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         
         _logger.LogInformation("Received response message from model.");
         
+        storeUser.Conversation.Add(new Models.Message(Role.User, messageText, DateOnly.FromDateTime(DateTime.Today)));
         storeUser.Conversation.Add(new Models.Message(Role.Ai, response, DateOnly.FromDateTime(DateTime.Today)));
-
-        if (storeUser.AnewMode == false)
-        {
-            _userRepository.UpdateUser(storeUser);
-        }
+        if (storeUser.AnewMode == false) _userRepository.UpdateUser(storeUser);
 
         if (storeUser.VoiceMode)
         {
@@ -1824,8 +1827,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
     private async Task<string> GetResponseFromAnthropicModel(ITelegramBotClient client, StoreUser storeUser,
         Message message, string messageText, CancellationToken cancellationToken)
     {
-        storeUser.Conversation.Add(new Models.Message(Role.User, messageText, DateOnly.FromDateTime(DateTime.Today)));
-
         string prompt = PreparePromptForClaude(storeUser, messageText);
 
         string response = await PostToClaudeApiAsync(prompt, storeUser.ClaudeApiKey, client, message, storeUser,
@@ -1946,13 +1947,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             chatMessages.Add(new ChatMessage(msg.Role == Role.Ai ? ChatMessageRole.Assistant : ChatMessageRole.User, msg.Msg));
         }
-
-        messageText = await ProcessUrlIfPresent(messageText, client, message.Chat.Id, storeUser, cancellationToken);
         
         chatMessages.Add(new ChatMessage(ChatMessageRole.User, messageText));
         
-        storeUser.Conversation.Add(new Models.Message(Role.User, messageText, DateOnly.FromDateTime(DateTime.Today)));
-
         ChatRequest request = new()
         {
             Model = storeUser.Model == Model.Gpt3 ? OpenAiNg.Models.Model.ChatGPTTurbo1106 : OpenAiNg.Models.Model.GPT4_1106_Preview,
@@ -1984,6 +1981,11 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         ITelegramBotClient botClient, long chatId, StoreUser storeUser,
         CancellationToken cancellationToken)
     {
+        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
+        {
+            return "";
+        }
+        
         string transcriptFromLink = await _youtubeTextProcessor.ProcessTextAsync(messageText, storeUser.ApiKey);
         if (messageText == transcriptFromLink)
         {
@@ -1992,7 +1994,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         await SendDocumentResponseAsync(transcriptFromLink, botClient, chatId, storeUser.Id,
             cancellationToken, "This is your transcript \ud83d\udc46");
-        return $"The full transcript from the youtube video:\n{transcriptFromLink}\nI want to ask you about this transcript... Wait for my question. Just say - 'Ask me about this transcript...'";
+        return $"This is the transcript from my web link:\n\n######\n{transcriptFromLink}\n######\n\nI want to ask you about this transcript... Wait for my question. Just say - 'Ask me about this transcript...'";
     }
 
     private Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,

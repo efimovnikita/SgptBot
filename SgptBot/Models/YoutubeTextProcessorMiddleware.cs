@@ -15,9 +15,12 @@ public class YoutubeTextProcessorMiddleware : IYoutubeTextProcessor
     {
         try
         {
-            // Input might contains some garbage
-            string[] strings = inputText.Split(' ');
-            string url = strings[0];
+            UrlExtractor urlExtractor = new();
+            string? url = urlExtractor.ExtractUrl(inputText);
+            if (String.IsNullOrWhiteSpace(url))
+            {
+                return inputText;
+            }
 
             string apiUrl = $"{_remoteApiUri}?url={Uri.EscapeDataString(url)}&token={token}";
             string apiResponse = await _httpClient.GetStringAsync(apiUrl);
