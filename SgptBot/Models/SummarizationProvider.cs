@@ -55,10 +55,14 @@ public class SummarizationProvider : ISummarizationProvider
             List<Task<string>> summaryTasks = paragraphs.Select(async paragraph =>
             {
                 FunctionResult functionResult = await kernel.InvokeAsync(summarize, new KernelArguments(paragraph));
+
+                string summary = functionResult.ToString();
+                
                 _logger.LogInformation(
                     message: "The paragraph with length '{ParagraphLength}' was processed. The summary length is '{Length}'...",
-                    args: new object?[] {paragraph.Length, functionResult.ToString().Length});
-                return functionResult.ToString();
+                    args: new object?[] { paragraph.Length, summary.Length });
+
+                return summary;
             }).ToList();
 
             string[] results = await Task.WhenAll(summaryTasks);
