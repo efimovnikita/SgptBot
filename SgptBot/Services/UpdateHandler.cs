@@ -106,15 +106,15 @@ public class UpdateHandler : IUpdateHandler
             return;
         }
         
-        string? messageText = message.Text;
-        if (messageText == null && messageType == MessageType.Voice)
+        string messageText = message.Text ?? "";
+        if (messageType == MessageType.Voice)
         {
             messageText = await GetTranscriptionTextFromVoiceMessage(message, client, cancellationToken);
         }
         
         StoreUser? storeUser = GetStoreUser(message.From);
         
-        if (messageText == null && messageType == MessageType.Document)
+        if (messageType == MessageType.Document)
         {
             string? textFromDocumentMessage = await GetTextFromDocumentMessage(message, client, cancellationToken);
             if (storeUser is {ContextFilterMode: false})
@@ -131,7 +131,7 @@ public class UpdateHandler : IUpdateHandler
             }
         }
 
-        string processedMsg = await ProcessUrlIfPresent(messageText: messageText ?? String.Empty,
+        string processedMsg = await ProcessUrlIfPresent(messageText: messageText,
             botClient: client,
             chatId: message.Chat.Id,
             storeUser: storeUser!,
