@@ -2192,7 +2192,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/reset_context - reset the context message\n" +
                        "/history - view the conversation history\n" +
                        "/reset - reset the current conversation\n" +
-                       "/summarize - get a summary for the correct conversation\n" +
+                       "/summarize - get a summary from the current conversation\n" +
                        "/toggle_voice - enable/disable voice mode\n" +
                        "/toggle_img_quality - switch between standard or HD image quality\n" +
                        "/toggle_img_style - switch between vivid or natural image style\n" +
