@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text;
+using HtmlAgilityPack;
 using Humanizer;
 using Microsoft.DeepDev;
 using Microsoft.Extensions.Logging;
@@ -35,7 +36,7 @@ public class UpdateHandler : IUpdateHandler
     private readonly IVectorStoreMiddleware _vectorStoreMiddleware;
     private readonly ISummarizationProvider _summarizationProvider;
     private readonly ITokenizer _tokenizer;
-    private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip" };
+    private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip", ".html", ".htm" };
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware, ISummarizationProvider summarizationProvider)
@@ -527,7 +528,7 @@ public class UpdateHandler : IUpdateHandler
             if (_allowedExtensions.Contains(extension) == false)
             {
                 await client.SendTextMessageAsync(message.Chat.Id, 
-                    "Bot supports '*.txt', '*.md', '*.zip' or '*.cs' formats.",
+                    "Bot supports '*.txt', '*.md', '*.zip', '*.htm' or '*.cs' formats.",
                     cancellationToken: cancellationToken);
                 return "";
             }
@@ -556,6 +557,11 @@ public class UpdateHandler : IUpdateHandler
                 ? await GetTextFromFilesInsideZipArchive(fullDocumentFileName, cancellationToken)
                 : await System.IO.File.ReadAllTextAsync(fullDocumentFileName, cancellationToken);
             
+            if (extension is ".html" or ".htm")
+            {
+                text = ExtractPlainTextFromHtmDoc(text);
+            }
+            
             return text;
         }
         catch (Exception e)
@@ -563,6 +569,48 @@ public class UpdateHandler : IUpdateHandler
             _logger.LogWarning("[{MethodName}] {Error}", nameof(GetTextFromDocumentMessage), e.Message);
             return "";
         }
+    }
+
+    private string ExtractPlainTextFromHtmDoc(string text)
+    {
+        HtmlDocument htmlDocument = new();
+        htmlDocument.LoadHtml(text);
+
+        HtmlNode? bodyNode = htmlDocument.DocumentNode.SelectSingleNode("//body");
+        return bodyNode == null ? text : ExtractTextFromNode(bodyNode);
+    }
+
+    private static string ExtractTextFromNode(HtmlNode? node)
+    {
+        if (node == null)
+        {
+            return "";
+        }
+
+        if (node.NodeType == HtmlNodeType.Text)
+        {
+            return node.InnerText.Trim();
+        }
+
+        if (node.Name.Equals("script", StringComparison.OrdinalIgnoreCase) ||
+            node.Name.Equals("style", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        if (node.HasAttributes && node.Attributes.Contains("style"))
+        {
+            node.Attributes.Remove("style");
+        }
+
+        StringBuilder builder = new();
+
+        foreach (HtmlNode? childNode in node.ChildNodes)
+        {
+            builder.AppendLine(ExtractTextFromNode(childNode));
+        }
+
+        return builder.ToString().Trim();
     }
     
     public async Task<string> GetTextFromFilesInsideZipArchive(string fullDocumentFileName, CancellationToken cancellationToken)
@@ -586,7 +634,14 @@ public class UpdateHandler : IUpdateHandler
         StringBuilder builder = new();
         foreach (string allowedPath in allowedPaths)
         {
-            builder.AppendLine(await System.IO.File.ReadAllTextAsync(allowedPath, cancellationToken));
+            string textFromFile = await System.IO.File.ReadAllTextAsync(allowedPath, cancellationToken);
+            string extension = Path.GetExtension(allowedPath);
+            if (extension is ".html" or ".htm")
+            {
+                textFromFile = ExtractPlainTextFromHtmDoc(textFromFile);
+            }
+            
+            builder.AppendLine(textFromFile);
         }
 
         return builder.ToString();
