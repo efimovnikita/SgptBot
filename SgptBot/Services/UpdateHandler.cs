@@ -3,6 +3,9 @@ using System.Net.Http.Headers;
 using System.Text;
 using HtmlAgilityPack;
 using Humanizer;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using Microsoft.DeepDev;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -36,7 +39,7 @@ public class UpdateHandler : IUpdateHandler
     private readonly IVectorStoreMiddleware _vectorStoreMiddleware;
     private readonly ISummarizationProvider _summarizationProvider;
     private readonly ITokenizer _tokenizer;
-    private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip", ".html", ".htm" };
+    private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf" };
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware, ISummarizationProvider summarizationProvider)
@@ -527,8 +530,9 @@ public class UpdateHandler : IUpdateHandler
             string extension = Path.GetExtension(document.FileName);
             if (_allowedExtensions.Contains(extension) == false)
             {
+                string extensions = String.Join(", ", _allowedExtensions);
                 await client.SendTextMessageAsync(message.Chat.Id, 
-                    "Bot supports '*.txt', '*.md', '*.zip', '*.htm' or '*.cs' formats.",
+                    $"Bot supports {extensions} formats.",
                     cancellationToken: cancellationToken);
                 return "";
             }
@@ -634,11 +638,25 @@ public class UpdateHandler : IUpdateHandler
         StringBuilder builder = new();
         foreach (string allowedPath in allowedPaths)
         {
-            string textFromFile = await System.IO.File.ReadAllTextAsync(allowedPath, cancellationToken);
             string extension = Path.GetExtension(allowedPath);
-            if (extension is ".html" or ".htm")
+            string textFromFile = "";
+            
+            if (extension.Equals(".html", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".htm", StringComparison.OrdinalIgnoreCase))
             {
                 textFromFile = ExtractPlainTextFromHtmDoc(textFromFile);
+            }
+            
+            if (extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                textFromFile = ExtractPlainTextFromPdfDoc(allowedPath);
+            }
+            
+            if (extension.Equals(".md", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                textFromFile = await System.IO.File.ReadAllTextAsync(allowedPath, cancellationToken);
             }
             
             builder.AppendLine(textFromFile);
@@ -646,7 +664,37 @@ public class UpdateHandler : IUpdateHandler
 
         return builder.ToString();
     }
-    
+
+    private string ExtractPlainTextFromPdfDoc(string path)
+    {
+        try
+        {
+            StringBuilder builder = new();
+
+            byte[] fileBytes = System.IO.File.ReadAllBytes(path);
+
+            using (MemoryStream memoryStream = new(fileBytes))
+            {
+                PdfReader reader = new(memoryStream);
+                PdfDocument pdfDocument = new(reader);
+            
+                int pages = pdfDocument.GetNumberOfPages();
+                for (int i = 1; i <= pages; i++)
+                {
+                    PdfPage? page = pdfDocument.GetPage(i);
+                    string? text = PdfTextExtractor.GetTextFromPage(page, new SimpleTextExtractionStrategy());
+                    builder.AppendLine(text);
+                }
+            }
+
+            return builder.ToString();
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+    }
+
     private (List<string>, string) UnzipToTempFolder(string zipFilePath)
     {
         if (!System.IO.File.Exists(zipFilePath))
