@@ -644,7 +644,7 @@ public class UpdateHandler : IUpdateHandler
             if (extension.Equals(".html", StringComparison.OrdinalIgnoreCase) ||
                 extension.Equals(".htm", StringComparison.OrdinalIgnoreCase))
             {
-                textFromFile = ExtractPlainTextFromHtmDoc(textFromFile);
+                textFromFile = ExtractPlainTextFromHtmDoc(await System.IO.File.ReadAllTextAsync(allowedPath, cancellationToken));
             }
             
             if (extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
