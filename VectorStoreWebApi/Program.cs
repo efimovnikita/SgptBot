@@ -65,6 +65,7 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
         builder.Services.AddCors();
+        builder.Services.AddHealthChecks();
 
         WebApplication app = builder.Build();
 
@@ -78,9 +79,9 @@ public class Program
         app.UseHttpsRedirection();
 
         app.UseAuthorization();
-        
-        app.MapGet("/heartbeat", () => Results.Ok("API is alive"));
 
+        app.MapHealthChecks("/heartbeat");
+        
         app.MapPost("/SearchInMemory", async (MemorySearchDto input, HttpContext _, ILogger<Program> logger) =>
         {
             logger.LogInformation("SearchInMemory invoked with user ID: {UserId} and prompt: {Prompt}", input.UserId,
