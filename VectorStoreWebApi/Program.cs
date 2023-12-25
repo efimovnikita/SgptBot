@@ -4,6 +4,7 @@ using Microsoft.SemanticKernel.Connectors.Memory.Chroma;
 using Microsoft.SemanticKernel.Memory;
 using Microsoft.SemanticKernel.Text;
 using SgptBot.Shared.Models;
+using VectorStoreWebApi.Health;
 
 #pragma warning disable CS0618 // Type or member is obsolete
 
@@ -53,11 +54,6 @@ public class Program
 
         _chromaStore = new ChromaMemoryStore(endpoint);
         
-        // ensure that chromadb running
-        using HttpClient client = new();
-        HttpResponseMessage response = await client.GetAsync(endpoint + "/api/v1");
-        response.EnsureSuccessStatusCode();
-        
         WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
         // Add services to the container.
@@ -65,7 +61,9 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
         builder.Services.AddCors();
-        builder.Services.AddHealthChecks();
+        builder.Services.AddHealthChecks()
+            .AddCheck<DataBaseHealthCheck>("Chroma");
+        builder.Services.AddHttpClient();
 
         WebApplication app = builder.Build();
 
