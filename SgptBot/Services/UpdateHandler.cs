@@ -885,22 +885,16 @@ public class UpdateHandler : IUpdateHandler
         string base64Image = ImageToBase64(fileName);
         object payload = GetPayload(base64Image, message.Caption);
         
-        // Convert payload to JSON string
         string jsonContent = JsonConvert.SerializeObject(payload);
 
-        // Prepare the HTTP client
         HttpClient httpClient = new();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", storeUser!.ApiKey);
         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        // The URL to call
-
-        // Send the POST request
         HttpResponseMessage response = await httpClient.PostAsync(
             "https://api.openai.com/v1/chat/completions",
             new StringContent(jsonContent, Encoding.UTF8, "application/json"), cancellationToken);
 
-        // Read the response as a string
         string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
         
         JObject parsedJson = JObject.Parse(responseString);
@@ -926,6 +920,9 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
             return;
         }
+        
+        storeUser.Conversation.Add(new Models.Message(Role.Ai, content, DateOnly.FromDateTime(DateTime.Today)));
+        if (storeUser.AnewMode == false) _userRepository.UpdateUser(storeUser);
 
         if (!storeUser.VoiceMode)
         {
