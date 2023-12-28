@@ -1387,7 +1387,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         StoreUser[] users = _userRepository.GetAllUsers();
         StoreUser[] activeUsers = users
-            .Where(user => user.History.Any(msg => msg.Role == Role.Ai))
+            .Where(user => user.History.Any(msg => msg.Role == Role.Ai) ||
+                           user.Conversation.Any(msg => msg.Role == Role.Ai))
             .OrderByDescending(user => user.ActivityTime)
             .ToArray();
         
