@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text;
 using HtmlAgilityPack;
 using Humanizer;
@@ -170,6 +172,7 @@ public class UpdateHandler : IUpdateHandler
             "/reset_context"         => ResetContextCommand(_botClient, message, cancellationToken),
             "/history"               => HistoryCommand(_botClient, message, cancellationToken),
             "/about"                 => AboutCommand(_botClient, message, cancellationToken),
+            "/version"               => VersionCommand(_botClient, message, cancellationToken),
             "/users"                 => UsersCommand(_botClient, message, cancellationToken),
             "/all_users"             => AllUsersCommand(_botClient, message, cancellationToken),
             "/allow"                 => AllowCommand(_botClient, message, cancellationToken),
@@ -188,6 +191,32 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> VersionCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            GetVersionWithDateTime(),
+            cancellationToken: cancellationToken);
+    }
+
+    private static string GetVersionWithDateTime()
+    {
+        Assembly assembly = Assembly.GetExecutingAssembly();
+
+        FileInfo fileInfo = new(assembly.Location);
+        DateTime lastWriteTime = fileInfo.LastWriteTime;
+
+        string versionWithDateTime = String.Format(
+            CultureInfo.InvariantCulture,
+            "{0}.{1}.{2}{3}",
+            1,
+            0,
+            lastWriteTime.ToString("yyyyMMdd"),
+            lastWriteTime.ToString("HHmmss")
+        );
+
+        return versionWithDateTime;
     }
 
     private async Task<bool> StoreUrlTranscriptInMemory(Message message, ITelegramBotClient client,
@@ -2303,7 +2332,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/image - generate an image with help of DALL·E 3\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
-                       "/about - about this bot";
+                       "/about - about this bot\n" +
+                       "/version - version of this bot";
         
         if (storeUser.IsAdministrator)
         {
