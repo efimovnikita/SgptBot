@@ -837,21 +837,16 @@ public class UpdateHandler : IUpdateHandler
             return false;
         }
 
-        if (user.Model is Model.Gpt3 or Model.Gpt4)
+        switch (user.Model)
         {
-            if (String.IsNullOrWhiteSpace(user.ApiKey))
-            {
-                await client.SendTextMessageAsync(chatId, "Your OpenAI API key is not set. Use '/key' command and set key.");
+            case Model.Gpt3 or Model.Gpt4 when String.IsNullOrWhiteSpace(user.ApiKey):
+                await client.SendTextMessageAsync(chatId,
+                    "Your OpenAI API key is not set. Use '/key' command and set key.");
                 return false;
-            }
-        }
-        else
-        {
-            if (String.IsNullOrWhiteSpace(user.ClaudeApiKey))
-            {
-                await client.SendTextMessageAsync(chatId, "Your Claude API key is not set. Use '/key_claude' command and set key.");
+            case Model.Claude21 when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
+                await client.SendTextMessageAsync(chatId,
+                    "Your Claude API key is not set. Use '/key_claude' command and set key.");
                 return false;
-            }
         }
 
         if (user is {IsAdministrator: false, IsBlocked: true})
