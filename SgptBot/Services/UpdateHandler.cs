@@ -1739,13 +1739,15 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton gpt3Button = new("OpenAI GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
         InlineKeyboardButton gpt4Button = new("OpenAI GPT-4 Turbo") { CallbackData = "/model gpt4"};
         InlineKeyboardButton claudeButton = new("Anthropic Claude 2.1") { CallbackData = "/model claude21"};
+        InlineKeyboardButton customButton = new("Custom model") { CallbackData = "/model custom"};
      
         InlineKeyboardButton[] row1 = { gpt3Button };
         InlineKeyboardButton[] row2 = { gpt4Button };
         InlineKeyboardButton[] row3 = { claudeButton };
+        InlineKeyboardButton[] row4 = { customButton };
             
         // Buttons by rows
-        InlineKeyboardButton[][] buttons = { row1, row2, row3 };
+        InlineKeyboardButton[][] buttons = [row1, row2, row3, row4];
     
         // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
@@ -1754,13 +1756,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             """
             Select the model that you want to use.
 
-            1) GPT-3.5 models can understand and generate natural language or code. Our most capable and cost effective model in the GPT-3.5 family.
-            2) GPT-4 is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any of our previous models, thanks to its broader general knowledge and advanced reasoning capabilities.
+            1) GPT-3.5 models can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family.
+            2) GPT-4 is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities.
             3) Claude 2 is a language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages.
+            4) Custom Open-Source Large Language Model. Potentially it can be gemma, llama2, mistral, mixtral, llava, neural-chat, codellama, dolphin-mixtral, mistral-openorca, llama2-uncensored, orca-mini, phi, deepseek-coder, dolphin-mistral, vicuna, wizard-vicuna-uncensored, zephyr, openhermes, wizardcoder, qwen, llama2-chinese, phind-codellama, tinyllama, openchat, orca2, falcon, wizard-math, nous-hermes, dolphin-phi, yi, tinydolphin, starling-lm, codeup, starcoder, medllama2, wizardlm-uncensored, everythinglm, bakllava, stable-code, solar, stable-beluga, sqlcoder, yarn-mistral, nous-hermes2-mixtral, samantha-mistral, stablelm-zephyr, meditron, wizard-vicuna, magicoder, stablelm2, yarn-llama2, nous-hermes2, deepseek-llm, llama-pro, open-orca-platypus2, codebooga, nexusraven, mistrallite, goliath, notux, alfred, megadolphin, wizardlm, xwinlm, nomic-embed-text, notus, duckdb-nsql, all-minilm. The final choice was made by admin.
             """,
             replyMarkup: inlineKeyboard,
             cancellationToken: cancellationToken);
-
     }
 
     private async Task<Message> SetSelectedModel(ITelegramBotClient botClient, long chatId,
@@ -1770,15 +1772,17 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         if (String.IsNullOrWhiteSpace(modelName))
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5' or 'gpt4'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21' or 'custom'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
-        
-        if (modelName.ToLower().Equals("gpt3.5") == false && modelName.ToLower().Equals("gpt4") == false && 
-            modelName.ToLower().Equals("claude21") == false)
+
+        if (modelName.ToLower().Equals("gpt3.5") == false &&
+            modelName.ToLower().Equals("gpt4") == false &&
+            modelName.ToLower().Equals("claude21") == false &&
+            modelName.ToLower().Equals("custom") == false)
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4' or 'claude21'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21' or 'custom'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -1787,6 +1791,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             "gpt3.5" => Model.Gpt3,
             "gpt4" => Model.Gpt4,
             "claude21" => Model.Claude21,
+            "custom" => Model.Custom,
             _ => Model.Gpt3
         };
 
@@ -1800,6 +1805,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Gpt3 => "GPT-3.5 Turbo",
             Model.Gpt4 => "GPT-4 Turbo",
             Model.Claude21 => "Claude 2.1",
+            Model.Custom => "Custom"
         };
         
         return await botClient.SendTextMessageAsync(
@@ -1830,6 +1836,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Gpt3 => "GPT-3.5 Turbo",
             Model.Gpt4 => "GPT-4 Turbo",
             Model.Claude21 => "Claude 2.1",
+            Model.Custom => "Custom",
             _ => throw new ArgumentOutOfRangeException()
         };
 
@@ -1932,7 +1939,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         string? response;
-        if (storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4)
+        if (storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4 || storeUser.Model == Model.Custom)
         {
             response = await GetResponseFromOpenAiModel(botClient, storeUser, message, messageText, cancellationToken);
         }
@@ -2082,7 +2089,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         string messageText,
         CancellationToken cancellationToken)
     {
-        OpenAiApi api = new(storeUser.ApiKey);
+        OpenAiApi api = new(storeUser.Model == Model.Custom ? "" :storeUser.ApiKey);
+        
+        if (storeUser.Model == Model.Custom)
+        {
+            string customModelApi = Environment.GetEnvironmentVariable("CUSTOMMODELAPI")!;
+            api.ApiUrlFormat = $"{customModelApi}/{{0}}/{{1}}";
+        }
         
         List<ChatMessage> chatMessages = [];
 
@@ -2101,7 +2114,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         
         ChatRequest request = new()
         {
-            Model = storeUser.Model == Model.Gpt3 ? OpenAiNg.Models.Model.ChatGPTTurbo1106 : OpenAiNg.Models.Model.GPT4_1106_Preview,
+            Model = storeUser.Model switch
+            {
+                Model.Custom => Environment.GetEnvironmentVariable("CUSTOMMODELNAME"),
+                Model.Gpt3 => OpenAiNg.Models.Model.ChatGPTTurbo1106,
+                _ => OpenAiNg.Models.Model.GPT4_1106_Preview
+            },
             Messages = chatMessages.ToArray()
         };
 

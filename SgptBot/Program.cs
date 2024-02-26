@@ -96,6 +96,18 @@ IHost host = Host.CreateDefaultBuilder(args)
             throw new ArgumentNullException(nameof(redisServer), "Environment variable REDIS_SERVER is not set.");
         }
 
+        string? customModelApi = Environment.GetEnvironmentVariable("CUSTOMMODELAPI");
+        if (String.IsNullOrWhiteSpace(customModelApi))
+        {
+            throw new ArgumentNullException(nameof(customModelApi), "Environment variable CUSTOMMODELAPI is not set.");
+        }
+
+        string? customModelName = Environment.GetEnvironmentVariable("CUSTOMMODELNAME");
+        if (String.IsNullOrWhiteSpace(customModelName))
+        {
+            throw new ArgumentNullException(nameof(customModelName), "Environment variable CUSTOMMODELNAME is not set.");
+        }
+
         services.AddHttpClient("telegram_bot_client")
             .AddTypedClient<ITelegramBotClient>((httpClient, _) =>
             {
