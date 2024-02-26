@@ -1739,12 +1739,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton gpt3Button = new("OpenAI GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
         InlineKeyboardButton gpt4Button = new("OpenAI GPT-4 Turbo") { CallbackData = "/model gpt4"};
         InlineKeyboardButton claudeButton = new("Anthropic Claude 2.1") { CallbackData = "/model claude21"};
-        InlineKeyboardButton customButton = new("Custom model") { CallbackData = "/model custom"};
+        string customModelName = $"{GetCapitalizedModelName()}";
+        InlineKeyboardButton customButton = new(customModelName) {CallbackData = "/model custom"};
      
-        InlineKeyboardButton[] row1 = { gpt3Button };
-        InlineKeyboardButton[] row2 = { gpt4Button };
-        InlineKeyboardButton[] row3 = { claudeButton };
-        InlineKeyboardButton[] row4 = { customButton };
+        InlineKeyboardButton[] row1 = [gpt3Button];
+        InlineKeyboardButton[] row2 = [gpt4Button];
+        InlineKeyboardButton[] row3 = [claudeButton];
+        InlineKeyboardButton[] row4 = [customButton];
             
         // Buttons by rows
         InlineKeyboardButton[][] buttons = [row1, row2, row3, row4];
@@ -1805,7 +1806,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Gpt3 => "GPT-3.5 Turbo",
             Model.Gpt4 => "GPT-4 Turbo",
             Model.Claude21 => "Claude 2.1",
-            Model.Custom => "Custom"
+            Model.Custom => $"{GetCapitalizedModelName()}"
         };
         
         return await botClient.SendTextMessageAsync(
@@ -1836,7 +1837,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Gpt3 => "GPT-3.5 Turbo",
             Model.Gpt4 => "GPT-4 Turbo",
             Model.Claude21 => "Claude 2.1",
-            Model.Custom => "Custom",
+            Model.Custom => GetCapitalizedModelName(),
             _ => throw new ArgumentOutOfRangeException()
         };
 
@@ -1856,6 +1857,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? "_<empty>_"}",
             parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
+    }
+
+    private static string GetCapitalizedModelName()
+    {
+        string variable = Environment.GetEnvironmentVariable("CUSTOMMODELNAME")!;
+        return Char.ToUpper(variable[0]) + variable[1..];
     }
 
     private async Task<Message> ResetConversationCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
