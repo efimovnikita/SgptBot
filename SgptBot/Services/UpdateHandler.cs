@@ -1429,7 +1429,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             StoreUser user = activeUsers[i];
             string lastActivityMessage = GetLastActivityMessage(user.ActivityTime);
             builder.AppendLine(
-                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago;");
+                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago; Model: {user.Model};");
         }
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, 
