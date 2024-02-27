@@ -2146,10 +2146,28 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Messages = chatMessages.ToArray()
         };
 
-        ChatResult? result;
+        StringBuilder builder = new();
         try
         {
-            result = await api.Chat.CreateChatCompletionAsync(request);
+            DateTime lastSentAt = DateTime.Now;
+            
+            await foreach (ChatResult chatResult in api.Chat.StreamChatEnumerableAsync(request)
+                               .WithCancellation(cancellationToken))
+            {
+                string? content = chatResult.Choices?[0].Delta?.Content;
+                if (String.IsNullOrEmpty(content) == false)
+                {
+                    builder.Append(content);
+                }
+
+                if (DateTime.Now - lastSentAt < TimeSpan.FromSeconds(45)) continue;
+                
+                await client.SendTextMessageAsync(chatId: message.Chat.Id,
+                    text: "Receiving a message from the LLM. Please wait...",
+                    cancellationToken: cancellationToken);
+                
+                lastSentAt = DateTime.Now;
+            }
         }
         catch (Exception e)
         {
@@ -2163,8 +2181,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             return "";
         }
 
-        string? response = result.Choices?[0].Message?.Content;
-        return response;
+        return builder.ToString();
     }
 
     private async Task<string> ProcessUrlIfPresent(string messageText,
