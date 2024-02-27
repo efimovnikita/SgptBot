@@ -1943,7 +1943,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         string? response;
         if (storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4 || storeUser.Model == Model.Custom)
         {
-            response = await GetResponseFromOpenAiModel(botClient, storeUser, message, messageText, cancellationToken);
+            response = await GetResponseFromOpenAiLikeModel(botClient, storeUser, message, messageText, cancellationToken);
         }
         else
         {
@@ -2085,7 +2085,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return "";
     }
     
-    private async Task<string?> GetResponseFromOpenAiModel(ITelegramBotClient client,
+    private async Task<string?> GetResponseFromOpenAiLikeModel(ITelegramBotClient client,
         StoreUser storeUser,
         Message message,
         string messageText,
