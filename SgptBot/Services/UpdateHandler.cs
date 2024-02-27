@@ -1978,8 +1978,29 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                     cancellationToken: cancellationToken);
             }
         }
-        
-        return await SendBotResponseDependingOnMsgLength(response, botClient, message.Chat.Id, storeUser.Id, cancellationToken, message.MessageId, ParseMode.Markdown);
+
+        try
+        {
+            return await SendBotResponseDependingOnMsgLength(response, botClient, message.Chat.Id, storeUser.Id, cancellationToken, message.MessageId, ParseMode.Markdown);
+        }
+        catch (ApiRequestException e)
+        {
+            _logger.LogError("[{MethodName}] {Error}", nameof(TalkToModelCommand), e.Message);
+
+            return await botClient.SendTextMessageAsync(chatId: message.Chat.Id,
+                text: response,
+                parseMode: null,
+                replyToMessageId: message.MessageId,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception e)
+        {
+            return await botClient.SendTextMessageAsync(chatId: message.Chat.Id,
+                text: e.Message,
+                parseMode: null,
+                replyToMessageId: message.MessageId,
+                cancellationToken: cancellationToken);
+        }
     }
 
     private async Task<string> GetResponseFromAnthropicModel(ITelegramBotClient client, StoreUser storeUser,
@@ -2178,33 +2199,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 userId: userId,
                 cancellationToken: cancellationToken);
         }
-
-        try
-        {
-            return client.SendTextMessageAsync(chatId: chatId,
-                text: msg,
-                parseMode: parseMode,
-                replyToMessageId: replyMsgId,
-                cancellationToken: cancellationToken);
-        }
-        catch (ApiRequestException e)
-        {
-            _logger.LogError("[{MethodName}] {Error}", nameof(SendBotResponseDependingOnMsgLength), e.Message);
-
-            return client.SendTextMessageAsync(chatId: chatId,
-                text: msg,
-                parseMode: null,
-                replyToMessageId: replyMsgId,
-                cancellationToken: cancellationToken);
-        }
-        catch (Exception e)
-        {
-            return client.SendTextMessageAsync(chatId: chatId,
-                text: e.Message,
-                parseMode: null,
-                replyToMessageId: replyMsgId,
-                cancellationToken: cancellationToken);
-        }
+        
+        return client.SendTextMessageAsync(chatId: chatId,
+            text: msg,
+            parseMode: parseMode,
+            replyToMessageId: replyMsgId,
+            cancellationToken: cancellationToken);
     }
 
     private static async Task<Message> SendDocumentResponseAsync(string text, ITelegramBotClient botClient,
