@@ -3,6 +3,9 @@ using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
+using Anthropic.SDK;
+using Anthropic.SDK.Constants;
+using Anthropic.SDK.Messaging;
 using HtmlAgilityPack;
 using Humanizer;
 using iText.Kernel.Pdf;
@@ -41,7 +44,7 @@ public class UpdateHandler : IUpdateHandler
     private readonly IVectorStoreMiddleware _vectorStoreMiddleware;
     private readonly ISummarizationProvider _summarizationProvider;
     private readonly ITokenizer _tokenizer;
-    private readonly string[] _allowedExtensions = { ".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf" };
+    private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf"];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware, ISummarizationProvider summarizationProvider)
@@ -1736,14 +1739,16 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton claudeButton = new("Anthropic Claude 2.1") { CallbackData = "/model claude21"};
         string customModelName = $"{GetCapitalizedModelName()}";
         InlineKeyboardButton customButton = new(customModelName) {CallbackData = "/model custom"};
-     
+        InlineKeyboardButton claude3OpusButton = new("Anthropic Claude 3 Opus") { CallbackData = "/model claude3opus"};
+        
         InlineKeyboardButton[] row1 = [gpt3Button];
         InlineKeyboardButton[] row2 = [gpt4Button];
         InlineKeyboardButton[] row3 = [claudeButton];
         InlineKeyboardButton[] row4 = [customButton];
+        InlineKeyboardButton[] row5 = [claude3OpusButton];
             
         // Buttons by rows
-        InlineKeyboardButton[][] buttons = [row1, row2, row3, row4];
+        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row4];
     
         // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
@@ -1755,7 +1760,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             1) GPT-3.5 models can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family.
             2) GPT-4 is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities.
             3) Claude 2 is a language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages.
-            4) Custom Open-Source Large Language Model. Potentially it can be gemma, llama2, mistral, mixtral, llava, neural-chat, codellama, dolphin-mixtral, mistral-openorca, llama2-uncensored, orca-mini, phi, deepseek-coder, dolphin-mistral, vicuna, wizard-vicuna-uncensored, zephyr, openhermes, wizardcoder, qwen, llama2-chinese, phind-codellama, tinyllama, openchat, orca2, falcon, wizard-math, nous-hermes, dolphin-phi, yi, tinydolphin, starling-lm, codeup, starcoder, medllama2, wizardlm-uncensored, everythinglm, bakllava, stable-code, solar, stable-beluga, sqlcoder, yarn-mistral, nous-hermes2-mixtral, samantha-mistral, stablelm-zephyr, meditron, wizard-vicuna, magicoder, stablelm2, yarn-llama2, nous-hermes2, deepseek-llm, llama-pro, open-orca-platypus2, codebooga, nexusraven, mistrallite, goliath, notux, alfred, megadolphin, wizardlm, xwinlm, nomic-embed-text, notus, duckdb-nsql, all-minilm. The final choice was made by admin.
+            4) Claude 3 Opus is a powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding.
+            5) Custom Open-Source Large Language Model. Potentially it can be gemma, llama2, mistral, mixtral, llava, neural-chat, codellama, dolphin-mixtral, mistral-openorca, llama2-uncensored, orca-mini, phi, deepseek-coder, dolphin-mistral, vicuna, wizard-vicuna-uncensored, zephyr, openhermes, wizardcoder, qwen, llama2-chinese, phind-codellama, tinyllama, openchat, orca2, falcon, wizard-math, nous-hermes, dolphin-phi, yi, tinydolphin, starling-lm, codeup, starcoder, medllama2, wizardlm-uncensored, everythinglm, bakllava, stable-code, solar, stable-beluga, sqlcoder, yarn-mistral, nous-hermes2-mixtral, samantha-mistral, stablelm-zephyr, meditron, wizard-vicuna, magicoder, stablelm2, yarn-llama2, nous-hermes2, deepseek-llm, llama-pro, open-orca-platypus2, codebooga, nexusraven, mistrallite, goliath, notux, alfred, megadolphin, wizardlm, xwinlm, nomic-embed-text, notus, duckdb-nsql, all-minilm. The final choice was made by admin.
             """,
             replyMarkup: inlineKeyboard,
             cancellationToken: cancellationToken);
@@ -1768,17 +1774,18 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         if (String.IsNullOrWhiteSpace(modelName))
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21' or 'custom'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus' or 'custom'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
         if (modelName.ToLower().Equals("gpt3.5") == false &&
             modelName.ToLower().Equals("gpt4") == false &&
             modelName.ToLower().Equals("claude21") == false &&
+            modelName.ToLower().Equals("claude3opus") == false &&
             modelName.ToLower().Equals("custom") == false)
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21' or 'custom'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus' or 'custom'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -1787,6 +1794,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             "gpt3.5" => Model.Gpt3,
             "gpt4" => Model.Gpt4,
             "claude21" => Model.Claude21,
+            "claude3opus" => Model.Claude3Opus,
+            "claude3sonnet" => Model.Claude3Sonnet,
             "custom" => Model.Custom,
             _ => Model.Gpt3
         };
@@ -1794,14 +1803,15 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         storeUser.Model = selectedModel;
         _userRepository.UpdateUser(storeUser);
 
-#pragma warning disable CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
         string mName = selectedModel switch
-#pragma warning restore CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
         {
             Model.Gpt3 => "GPT-3.5 Turbo",
             Model.Gpt4 => "GPT-4 Turbo",
             Model.Claude21 => "Claude 2.1",
-            Model.Custom => $"{GetCapitalizedModelName()}"
+            Model.Claude3Sonnet => "Claude 3 Sonnet",
+            Model.Claude3Opus => "Claude 3 Opus",
+            Model.Custom => $"{GetCapitalizedModelName()}",
+            _ => throw new ArgumentOutOfRangeException()
         };
         
         return await botClient.SendTextMessageAsync(
@@ -1833,6 +1843,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Gpt4 => "GPT-4 Turbo",
             Model.Claude21 => "Claude 2.1",
             Model.Custom => GetCapitalizedModelName(),
+            Model.Claude3Sonnet => "Claude 3 Sonnet",
+            Model.Claude3Opus => "Claude 3 Opus",
             _ => throw new ArgumentOutOfRangeException()
         };
 
@@ -1945,6 +1957,10 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             response = await GetResponseFromOpenAiLikeModel(botClient, storeUser, message, messageText, cancellationToken);
         }
+        else if (storeUser.Model == Model.Claude3Opus)
+        {
+            response = await GetResponseFromClaude3Model(botClient, storeUser, message, messageText, cancellationToken);
+        }
         else
         {
             response = await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken);
@@ -2001,6 +2017,56 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 replyToMessageId: message.MessageId,
                 cancellationToken: cancellationToken);
         }
+    }
+
+    private async Task<string?> GetResponseFromClaude3Model(ITelegramBotClient botClient, StoreUser storeUser,
+        Message message, string messageText, CancellationToken cancellationToken)
+    {
+        AnthropicClient client = new(new APIAuthentication(storeUser.ClaudeApiKey));
+        List<Anthropic.SDK.Messaging.Message> chatMessages = [];
+        foreach (Models.Message msg in storeUser.Conversation.Where(m => m.Role != Role.System))
+        {
+            Anthropic.SDK.Messaging.Message item = new()
+            {
+                Role = msg.Role == Role.Ai ? RoleType.Assistant : RoleType.User,
+                Content = msg.Msg
+            };
+            chatMessages.Add(item);
+        }
+
+        chatMessages.Add(new Anthropic.SDK.Messaging.Message()
+        {
+            Role = RoleType.User,
+            Content = messageText
+        });
+
+        MessageParameters parameters = new()
+        {
+            Messages = chatMessages,
+            MaxTokens = 2000,
+            Model = AnthropicModels.Claude3Opus,
+            Stream = false,
+            Temperature = 1.0m,
+        };
+
+        MessageResponse? messageResponse;
+        try
+        {
+            messageResponse = await client.Messages.GetClaudeMessageAsync(parameters, cancellationToken);
+        }
+        catch (Exception e)
+        {
+            await SendBotResponseDependingOnMsgLength(msg: e.Message,
+                client: botClient,
+                chatId: message.Chat.Id,
+                userId: storeUser.Id,
+                cancellationToken: cancellationToken,
+                replyMsgId: message.MessageId);
+
+            return "";
+        }
+
+        return messageResponse.Content.FirstOrDefault(content => content.Type == "text")?.Text ?? "";
     }
 
     private async Task<string> GetResponseFromAnthropicModel(ITelegramBotClient client, StoreUser storeUser,
