@@ -846,7 +846,7 @@ public class UpdateHandler : IUpdateHandler
                 await client.SendTextMessageAsync(chatId,
                     "Your OpenAI API key is not set. Use '/key' command and set key.");
                 return false;
-            case Model.Claude21 when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
+            case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your Claude API key is not set. Use '/key_claude' command and set key.");
                 return false;
