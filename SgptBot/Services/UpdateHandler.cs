@@ -872,6 +872,14 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
             return;
         }
+        
+        if ((storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4 || storeUser.Model == Model.Claude3Opus) == false)
+        {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                "Error: you can use OpenAI GPT3 or GPT4 or Anthropic Claude Opus models in order to analyze pictures.",
+                cancellationToken: cancellationToken);
+            return;
+        }
 
         if (message.Photo is not {Length: > 0})
         {
@@ -910,39 +918,107 @@ public class UpdateHandler : IUpdateHandler
         }
 
         string base64Image = ImageToBase64(fileName);
-        object payload = GetPayload(base64Image, message.Caption);
-        
-        string jsonContent = JsonConvert.SerializeObject(payload);
-
-        HttpClient httpClient = new();
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", storeUser!.ApiKey);
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        HttpResponseMessage response = await httpClient.PostAsync(
-            "https://api.openai.com/v1/chat/completions",
-            new StringContent(jsonContent, Encoding.UTF8, "application/json"), cancellationToken);
-
-        string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
-        
-        JObject parsedJson = JObject.Parse(responseString);
         string content;
-        try
-        {
-            content = (string) parsedJson["choices"]?[0]?["message"]?["content"]!;
-        }
-        catch (Exception)
-        {
-            await client.SendTextMessageAsync(message.Chat.Id, 
-                "Error while getting response about the image",
-                replyToMessageId:  message.MessageId, 
-                cancellationToken: cancellationToken);
-            return;
-        }
         
+        switch (storeUser.Model)
+        {
+            case Model.Gpt4:
+            case Model.Gpt3:
+            {
+                object payload = GetPayload(base64Image, message.Caption);
+        
+                string jsonContent = JsonConvert.SerializeObject(payload);
+
+                HttpClient httpClient = new();
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", storeUser.ApiKey);
+                httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = await httpClient.PostAsync(
+                    "https://api.openai.com/v1/chat/completions",
+                    new StringContent(jsonContent, Encoding.UTF8, "application/json"), cancellationToken);
+
+                string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+        
+                JObject parsedJson = JObject.Parse(responseString);
+                try
+                {
+                    content = (string) parsedJson["choices"]?[0]?["message"]?["content"]!;
+                }
+                catch (Exception e)
+                {
+                    await client.SendTextMessageAsync(message.Chat.Id, 
+                        $"Error while getting response about the image:\n\n{e.Message}",
+                        replyToMessageId:  message.MessageId, 
+                        cancellationToken: cancellationToken);
+                    return;
+                }
+
+                break;
+            }
+            case Model.Claude3Opus:
+            {
+                AnthropicClient anthropicClient = new(new APIAuthentication(storeUser.ClaudeApiKey));
+                List<Anthropic.SDK.Messaging.Message> messages =
+                [
+                    new Anthropic.SDK.Messaging.Message
+                    {
+                        Role = RoleType.User,
+                        Content = new dynamic[]
+                        {
+                            new ImageContent
+                            {
+                                Source = new ImageSource
+                                {
+                                    MediaType = "image/jpeg",
+                                    Data = base64Image
+                                }
+                            },
+                            new TextContent
+                            {
+                                Text = message.Caption
+                            }
+                        }
+                    }
+                ];
+
+                MessageParameters parameters = new()
+                {
+                    Messages = messages,
+                    MaxTokens = 4000,
+                    Model = AnthropicModels.Claude3Opus,
+                    Stream = false,
+                    Temperature = 1.0m,
+                };
+
+                MessageResponse? messageResponse;
+                try
+                {
+                    messageResponse = await anthropicClient.Messages.GetClaudeMessageAsync(parameters, 
+                        cancellationToken);
+                }
+                catch (Exception e)
+                {
+                    await client.SendTextMessageAsync(message.Chat.Id, 
+                        $"Error while getting response about the image:\n\n{e.Message}",
+                        replyToMessageId:  message.MessageId, 
+                        cancellationToken: cancellationToken);
+                    return;
+                }
+            
+                content = messageResponse.Content.FirstOrDefault(c => c.Type == "text")?.Text ?? "";
+                break;
+            }
+            default:
+            {
+                content = "";
+                break;   
+            }
+        }
+
         if (String.IsNullOrEmpty(content))
         {
             await client.SendTextMessageAsync(message.Chat.Id, 
-                "Error while getting response about the image",
+                "Error while getting response about the image. Response is empty.",
                 replyToMessageId:  message.MessageId, 
                 cancellationToken: cancellationToken);
             return;
@@ -2043,7 +2119,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         MessageParameters parameters = new()
         {
             Messages = chatMessages,
-            MaxTokens = 2000,
+            MaxTokens = 4000,
             Model = AnthropicModels.Claude3Opus,
             Stream = false,
             Temperature = 1.0m,
