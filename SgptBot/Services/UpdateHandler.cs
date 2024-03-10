@@ -1024,6 +1024,7 @@ public class UpdateHandler : IUpdateHandler
             return;
         }
         
+        storeUser.Conversation.Add(new Models.Message(Role.User, message.Caption ?? "What is it?", DateOnly.FromDateTime(DateTime.Today)));
         storeUser.Conversation.Add(new Models.Message(Role.Ai, content, DateOnly.FromDateTime(DateTime.Today)));
         if (storeUser.AnewMode == false) _userRepository.UpdateUser(storeUser);
 
