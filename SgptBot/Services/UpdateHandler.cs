@@ -876,7 +876,7 @@ public class UpdateHandler : IUpdateHandler
         if ((storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4 || storeUser.Model == Model.Claude3Opus) == false)
         {
             await client.SendTextMessageAsync(message.Chat.Id,
-                "Error: you can use OpenAI GPT3 or GPT4 or Anthropic Claude Opus models in order to analyze pictures.",
+                "Error: you must use OpenAI GPT3 or GPT4 or Anthropic Claude Opus models in order to analyze pictures.",
                 cancellationToken: cancellationToken);
             return;
         }
@@ -917,105 +917,10 @@ public class UpdateHandler : IUpdateHandler
             return;
         }
 
-        string base64Image = ImageToBase64(fileName);
-        string content;
-        
-        switch (storeUser.Model)
-        {
-            case Model.Gpt4:
-            case Model.Gpt3:
-            {
-                object payload = GetPayload(base64Image, message.Caption);
-        
-                string jsonContent = JsonConvert.SerializeObject(payload);
+        string visionModelResponse =
+            await GetVisionModelResponse(message, storeUser, ImageToBase64(fileName), client, cancellationToken);
 
-                HttpClient httpClient = new();
-                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", storeUser.ApiKey);
-                httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-                HttpResponseMessage response = await httpClient.PostAsync(
-                    "https://api.openai.com/v1/chat/completions",
-                    new StringContent(jsonContent, Encoding.UTF8, "application/json"), cancellationToken);
-
-                string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
-        
-                JObject parsedJson = JObject.Parse(responseString);
-                try
-                {
-                    content = (string) parsedJson["choices"]?[0]?["message"]?["content"]!;
-                }
-                catch (Exception e)
-                {
-                    await client.SendTextMessageAsync(message.Chat.Id, 
-                        $"Error while getting response about the image:\n\n{e.Message}",
-                        replyToMessageId:  message.MessageId, 
-                        cancellationToken: cancellationToken);
-                    return;
-                }
-
-                break;
-            }
-            case Model.Claude3Opus:
-            {
-                AnthropicClient anthropicClient = new(new APIAuthentication(storeUser.ClaudeApiKey));
-                List<Anthropic.SDK.Messaging.Message> messages =
-                [
-                    new Anthropic.SDK.Messaging.Message
-                    {
-                        Role = RoleType.User,
-                        Content = new dynamic[]
-                        {
-                            new ImageContent
-                            {
-                                Source = new ImageSource
-                                {
-                                    MediaType = "image/jpeg",
-                                    Data = base64Image
-                                }
-                            },
-                            new TextContent
-                            {
-                                Text = message.Caption
-                            }
-                        }
-                    }
-                ];
-
-                MessageParameters parameters = new()
-                {
-                    Messages = messages,
-                    MaxTokens = 4000,
-                    Model = AnthropicModels.Claude3Opus,
-                    Stream = false,
-                    Temperature = 1.0m,
-                };
-
-                MessageResponse? messageResponse;
-                try
-                {
-                    messageResponse = await anthropicClient.Messages.GetClaudeMessageAsync(parameters, 
-                        cancellationToken);
-                }
-                catch (Exception e)
-                {
-                    await client.SendTextMessageAsync(message.Chat.Id, 
-                        $"Error while getting response about the image:\n\n{e.Message}",
-                        replyToMessageId:  message.MessageId, 
-                        cancellationToken: cancellationToken);
-                    return;
-                }
-            
-                content = messageResponse.Content.FirstOrDefault(c => c.Type == "text")?.Text ?? "";
-                break;
-            }
-            default:
-            {
-                content = "";
-                break;   
-            }
-        }
-
-        if (String.IsNullOrEmpty(content))
+        if (String.IsNullOrEmpty(visionModelResponse))
         {
             await client.SendTextMessageAsync(message.Chat.Id, 
                 "Error while getting response about the image. Response is empty.",
@@ -1025,12 +930,12 @@ public class UpdateHandler : IUpdateHandler
         }
         
         storeUser.Conversation.Add(new Models.Message(Role.User, message.Caption ?? "What is it?", DateOnly.FromDateTime(DateTime.Today)));
-        storeUser.Conversation.Add(new Models.Message(Role.Ai, content, DateOnly.FromDateTime(DateTime.Today)));
+        storeUser.Conversation.Add(new Models.Message(Role.Ai, visionModelResponse, DateOnly.FromDateTime(DateTime.Today)));
         if (storeUser.AnewMode == false) _userRepository.UpdateUser(storeUser);
 
         if (!storeUser.VoiceMode)
         {
-            await client.SendTextMessageAsync(message.Chat.Id, content,
+            await client.SendTextMessageAsync(message.Chat.Id, visionModelResponse,
                 parseMode: ParseMode.Markdown,
                 replyToMessageId: message.MessageId,
                 cancellationToken: cancellationToken);
@@ -1038,9 +943,9 @@ public class UpdateHandler : IUpdateHandler
         }
 
         _logger.LogInformation("Voice mode is active.");
-        _logger.LogInformation("Response length is: {length}", content.Length);
+        _logger.LogInformation("Response length is: {length}", visionModelResponse.Length);
 
-        string ttsAudioFilePath = await GetTtsAudio(content.Replace(Environment.NewLine, ""), storeUser.ApiKey);
+        string ttsAudioFilePath = await GetTtsAudio(visionModelResponse.Replace(Environment.NewLine, ""), storeUser.ApiKey);
         _logger.LogInformation("Path to tts audio message: {path}", ttsAudioFilePath);
             
         if (String.IsNullOrEmpty(ttsAudioFilePath) == false)
@@ -1052,10 +957,134 @@ public class UpdateHandler : IUpdateHandler
             return;
         }
 
-        await client.SendTextMessageAsync(message.Chat.Id, content,
+        await client.SendTextMessageAsync(message.Chat.Id, visionModelResponse,
             parseMode: ParseMode.Markdown,
             replyToMessageId:  message.MessageId, 
             cancellationToken: cancellationToken);
+    }
+
+    private static async Task<string> GetVisionModelResponse(Message message,
+        StoreUser storeUser, string base64Image, ITelegramBotClient client, CancellationToken cancellationToken)
+    {
+        string visionModelResponse;
+
+        switch (storeUser.Model)
+        {
+            case Model.Gpt4:
+            case Model.Gpt3:
+            {
+                visionModelResponse =
+                    await GetVisionResponseFromOpenAiModel(client, message, storeUser, base64Image, cancellationToken);
+                break;
+            }
+            case Model.Claude3Opus:
+            {
+                visionModelResponse =
+                    await GetVisionResponseFromAnthropicModel(client, message, storeUser, base64Image,
+                        cancellationToken);
+                break;
+            }
+            default:
+            {
+                visionModelResponse = "";
+                break;
+            }
+        }
+
+        return visionModelResponse;
+    }
+
+    private static async Task<string> GetVisionResponseFromAnthropicModel(ITelegramBotClient client, Message message,
+        StoreUser storeUser, string base64Image,
+        CancellationToken cancellationToken)
+    {
+        string visionModelResponse = "";
+        AnthropicClient anthropicClient = new(new APIAuthentication(storeUser.ClaudeApiKey));
+        List<Anthropic.SDK.Messaging.Message> messages =
+        [
+            new Anthropic.SDK.Messaging.Message
+            {
+                Role = RoleType.User,
+                Content = new dynamic[]
+                {
+                    new ImageContent
+                    {
+                        Source = new ImageSource
+                        {
+                            MediaType = "image/jpeg",
+                            Data = base64Image
+                        }
+                    },
+                    new TextContent
+                    {
+                        Text = message.Caption
+                    }
+                }
+            }
+        ];
+
+        MessageParameters parameters = new()
+        {
+            Messages = messages,
+            MaxTokens = 4000,
+            Model = AnthropicModels.Claude3Opus,
+            Stream = false,
+            Temperature = 1.0m,
+        };
+
+        MessageResponse? messageResponse;
+        try
+        {
+            messageResponse = await anthropicClient.Messages.GetClaudeMessageAsync(parameters,
+                cancellationToken);
+        }
+        catch (Exception e)
+        {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                $"Error while getting response about the image:\n\n{e.Message}",
+                replyToMessageId: message.MessageId,
+                cancellationToken: cancellationToken);
+            return visionModelResponse;
+        }
+
+        visionModelResponse = messageResponse.Content.FirstOrDefault(c => c.Type == "text")?.Text ?? "";
+        return visionModelResponse;
+    }
+
+    private static async Task<string> GetVisionResponseFromOpenAiModel(ITelegramBotClient client, Message message,
+        StoreUser storeUser, string base64Image,
+        CancellationToken cancellationToken)
+    {
+        string visionModelResponse = "";
+        object payload = GetPayload(base64Image, message.Caption);
+
+        string jsonContent = JsonConvert.SerializeObject(payload);
+
+        HttpClient httpClient = new();
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", storeUser.ApiKey);
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        HttpResponseMessage response = await httpClient.PostAsync(
+            "https://api.openai.com/v1/chat/completions",
+            new StringContent(jsonContent, Encoding.UTF8, "application/json"), cancellationToken);
+
+        string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        JObject parsedJson = JObject.Parse(responseString);
+        try
+        {
+            visionModelResponse = (string) parsedJson["choices"]?[0]?["message"]?["content"]!;
+        }
+        catch (Exception e)
+        {
+            await client.SendTextMessageAsync(message.Chat.Id,
+                $"Error while getting response about the image:\n\n{e.Message}",
+                replyToMessageId: message.MessageId,
+                cancellationToken: cancellationToken);
+            return visionModelResponse;
+        }
+
+        return visionModelResponse;
     }
 
     private static object GetPayload(string base64Image, string? caption)
