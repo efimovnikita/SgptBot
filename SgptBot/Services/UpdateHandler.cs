@@ -1524,6 +1524,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             .Where(user => user.History.Any(msg => msg.Role == Role.Ai) ||
                            user.Conversation.Any(msg => msg.Role == Role.Ai))
             .OrderByDescending(user => user.ActivityTime)
+            .Take(15)
             .ToArray();
         
         if (activeUsers.Length == 0)
@@ -1540,6 +1541,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             string lastActivityMessage = GetLastActivityMessage(user.ActivityTime);
             builder.AppendLine(
                 $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago; Model: {user.Model};");
+            builder.AppendLine();
         }
         
         return await botClient.SendTextMessageAsync(message.Chat.Id, 
