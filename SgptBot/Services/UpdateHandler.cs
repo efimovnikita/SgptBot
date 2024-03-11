@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Compression;
 using System.Net.Http.Headers;
@@ -1824,6 +1825,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
     }
 
+    [SuppressMessage("ReSharper", "StringLiteralTypo")]
     private async Task<Message> ModelCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
@@ -2058,19 +2060,14 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        string? response;
-        if (storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4 || storeUser.Model == Model.Custom)
+        string? response = storeUser!.Model switch
         {
-            response = await GetResponseFromOpenAiLikeModel(botClient, storeUser, message, messageText, cancellationToken);
-        }
-        else if (storeUser.Model == Model.Claude3Opus)
-        {
-            response = await GetResponseFromClaude3Model(botClient, storeUser, message, messageText, cancellationToken);
-        }
-        else
-        {
-            response = await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken);
-        }
+            Model.Gpt3 or Model.Gpt4 or Model.Custom => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
+                message, messageText, cancellationToken),
+            Model.Claude3Opus => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
+                cancellationToken),
+            _ => await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken),
+        };
         
         if (String.IsNullOrWhiteSpace(response))
         {
