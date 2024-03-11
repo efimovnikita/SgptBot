@@ -167,7 +167,9 @@ public class UpdateHandler : IUpdateHandler
         {
             "/usage"                 => UsageCommand(_botClient, message, cancellationToken),
             "/key"                   => SetKeyCommand(_botClient, message, cancellationToken),
+            "/reset_key"             => ResetKeyCommand(_botClient, message, cancellationToken),
             "/key_claude"            => SetKeyClaudeCommand(_botClient, message, cancellationToken),
+            "/reset_key_claude"      => ResetKeyClaudeCommand(_botClient, message, cancellationToken),
             "/reset"                 => ResetConversationCommand(_botClient, message, cancellationToken),
             "/info"                  => InfoCommand(message, cancellationToken),
             "/model"                 => ModelCommand(_botClient, message, cancellationToken),
@@ -195,6 +197,38 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ResetKeyClaudeCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.ClaudeApiKey = "";
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Anthropic Claude API key was reset.",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> ResetKeyCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.ApiKey = "";
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "OpenAI API key was reset.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> VersionCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -2521,7 +2555,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         string usage = "Usage:\n" +
                        "/key - set an OpenAI API key\n" +
+                       "/reset_key - reset an OpenAI API key\n" +
                        "/key_claude - set an Anthropic Claude API key\n" +
+                       "/reset_key_claude - reset an Anthropic Claude API key\n" +
                        "/model - choose the GPT model to work with\n" +
                        "/context - set the context message\n" +
                        "/contact - contact the bot admin\n" +
