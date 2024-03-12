@@ -1012,7 +1012,7 @@ public class UpdateHandler : IUpdateHandler
                     await GetVisionResponseFromOpenAiModel(client, message, storeUser, base64Image, cancellationToken);
                 break;
             }
-            case Model.Claude3Opus:
+            case Model.Claude3Opus or Model.Claude3Sonnet:
             {
                 visionModelResponse =
                     await GetVisionResponseFromAnthropicModel(client, message, storeUser, base64Image,
@@ -1061,7 +1061,7 @@ public class UpdateHandler : IUpdateHandler
         MessageParameters parameters = new()
         {
             Messages = messages,
-            MaxTokens = 4000,
+            MaxTokens = 8000,
             Model = AnthropicModels.Claude3Opus,
             Stream = false,
             Temperature = 1.0m,
@@ -1884,15 +1884,17 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         string customModelName = $"{GetCapitalizedModelName()}";
         InlineKeyboardButton customButton = new(customModelName) {CallbackData = "/model custom"};
         InlineKeyboardButton claude3OpusButton = new("Anthropic Claude 3 Opus") { CallbackData = "/model claude3opus"};
+        InlineKeyboardButton claude3SonnetButton = new("Anthropic Claude 3 Sonnet") { CallbackData = "/model claude3sonnet"};
         
         InlineKeyboardButton[] row1 = [gpt3Button];
         InlineKeyboardButton[] row2 = [gpt4Button];
         InlineKeyboardButton[] row3 = [claudeButton];
         InlineKeyboardButton[] row4 = [customButton];
         InlineKeyboardButton[] row5 = [claude3OpusButton];
+        InlineKeyboardButton[] row6 = [claude3SonnetButton];
             
         // Buttons by rows
-        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row4];
+        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row4];
     
         // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
@@ -1902,10 +1904,16 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Select the model that you want to use.
 
             1) GPT-3.5 models can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family.
+            
             2) GPT-4 is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities.
+            
             3) Claude 2 is a language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages.
+            
             4) Claude 3 Opus is a powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding.
-            5) Custom Open-Source Large Language Model. Potentially it can be gemma, llama2, mistral, mixtral, llava, neural-chat, codellama, dolphin-mixtral, mistral-openorca, llama2-uncensored, orca-mini, phi, deepseek-coder, dolphin-mistral, vicuna, wizard-vicuna-uncensored, zephyr, openhermes, wizardcoder, qwen, llama2-chinese, phind-codellama, tinyllama, openchat, orca2, falcon, wizard-math, nous-hermes, dolphin-phi, yi, tinydolphin, starling-lm, codeup, starcoder, medllama2, wizardlm-uncensored, everythinglm, bakllava, stable-code, solar, stable-beluga, sqlcoder, yarn-mistral, nous-hermes2-mixtral, samantha-mistral, stablelm-zephyr, meditron, wizard-vicuna, magicoder, stablelm2, yarn-llama2, nous-hermes2, deepseek-llm, llama-pro, open-orca-platypus2, codebooga, nexusraven, mistrallite, goliath, notux, alfred, megadolphin, wizardlm, xwinlm, nomic-embed-text, notus, duckdb-nsql, all-minilm. The final choice was made by admin.
+            
+            5) Claude 3 Sonnet strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers.
+            
+            6) Custom Open-Source Large Language Model. The final choice will be made by admin.
             """,
             replyMarkup: inlineKeyboard,
             cancellationToken: cancellationToken);
@@ -1926,10 +1934,11 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             modelName.ToLower().Equals("gpt4") == false &&
             modelName.ToLower().Equals("claude21") == false &&
             modelName.ToLower().Equals("claude3opus") == false &&
+            modelName.ToLower().Equals("claude3sonnet") == false &&
             modelName.ToLower().Equals("custom") == false)
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus' or 'custom'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet' or 'custom'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -2182,8 +2191,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         MessageParameters parameters = new()
         {
             Messages = chatMessages,
-            MaxTokens = 4000,
-            Model = AnthropicModels.Claude3Opus,
+            MaxTokens = 8000,
+            Model = storeUser.Model == Model.Claude3Opus ? AnthropicModels.Claude3Opus : AnthropicModels.Claude3Sonnet,
             Stream = false,
             Temperature = 1.0m,
         };
