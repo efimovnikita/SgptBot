@@ -1061,7 +1061,7 @@ public class UpdateHandler : IUpdateHandler
         MessageParameters parameters = new()
         {
             Messages = messages,
-            MaxTokens = 8000,
+            MaxTokens = 4090,
             Model = AnthropicModels.Claude3Opus,
             Stream = false,
             Temperature = 1.0m,
@@ -2191,7 +2191,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         MessageParameters parameters = new()
         {
             Messages = chatMessages,
-            MaxTokens = 8000,
+            MaxTokens = 4090,
             Model = storeUser.Model == Model.Claude3Opus ? AnthropicModels.Claude3Opus : AnthropicModels.Claude3Sonnet,
             Stream = false,
             Temperature = 1.0m,
