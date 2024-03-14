@@ -881,7 +881,7 @@ public class UpdateHandler : IUpdateHandler
                 await client.SendTextMessageAsync(chatId,
                     "Your OpenAI API key is not set. Use '/key' command and set key.");
                 return false;
-            case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
+            case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your Claude API key is not set. Use '/key_claude' command and set key.");
                 return false;
@@ -1012,7 +1012,7 @@ public class UpdateHandler : IUpdateHandler
                     await GetVisionResponseFromOpenAiModel(client, message, storeUser, base64Image, cancellationToken);
                 break;
             }
-            case Model.Claude3Opus or Model.Claude3Sonnet:
+            case Model.Claude3Opus:
             {
                 visionModelResponse =
                     await GetVisionResponseFromAnthropicModel(client, message, storeUser, base64Image,
@@ -1885,6 +1885,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton customButton = new(customModelName) {CallbackData = "/model custom"};
         InlineKeyboardButton claude3OpusButton = new("Anthropic Claude 3 Opus") { CallbackData = "/model claude3opus"};
         InlineKeyboardButton claude3SonnetButton = new("Anthropic Claude 3 Sonnet") { CallbackData = "/model claude3sonnet"};
+        InlineKeyboardButton claude3HaikuButton = new("Anthropic Claude 3 Haiku") { CallbackData = "/model claude3haiku"};
         
         InlineKeyboardButton[] row1 = [gpt3Button];
         InlineKeyboardButton[] row2 = [gpt4Button];
@@ -1892,9 +1893,10 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton[] row4 = [customButton];
         InlineKeyboardButton[] row5 = [claude3OpusButton];
         InlineKeyboardButton[] row6 = [claude3SonnetButton];
+        InlineKeyboardButton[] row7 = [claude3HaikuButton];
             
         // Buttons by rows
-        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row4];
+        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7, row4];
     
         // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
@@ -1913,7 +1915,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             
             5) Claude 3 Sonnet strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers.
             
-            6) Custom Open-Source Large Language Model. The final choice will be made by admin.
+            6) Claude 3 Haiku, the fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications.
+            
+            7) Custom Open-Source Large Language Model. The final choice will be made by admin.
             """,
             replyMarkup: inlineKeyboard,
             cancellationToken: cancellationToken);
@@ -1935,10 +1939,11 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             modelName.ToLower().Equals("claude21") == false &&
             modelName.ToLower().Equals("claude3opus") == false &&
             modelName.ToLower().Equals("claude3sonnet") == false &&
+            modelName.ToLower().Equals("claude3haiku") == false &&
             modelName.ToLower().Equals("custom") == false)
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet' or 'custom'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet', 'claude3haiku' or 'custom'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -1949,6 +1954,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             "claude21" => Model.Claude21,
             "claude3opus" => Model.Claude3Opus,
             "claude3sonnet" => Model.Claude3Sonnet,
+            "claude3haiku" => Model.Claude3Haiku,
             "custom" => Model.Custom,
             _ => Model.Gpt3
         };
@@ -1963,6 +1969,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Claude21 => "Claude 2.1",
             Model.Claude3Sonnet => "Claude 3 Sonnet",
             Model.Claude3Opus => "Claude 3 Opus",
+            Model.Claude3Haiku => "Claude 3 Haiku",
             Model.Custom => $"{GetCapitalizedModelName()}",
             _ => throw new ArgumentOutOfRangeException()
         };
@@ -1998,6 +2005,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Custom => GetCapitalizedModelName(),
             Model.Claude3Sonnet => "Claude 3 Sonnet",
             Model.Claude3Opus => "Claude 3 Opus",
+            Model.Claude3Haiku => "Claude 3 Haiku",
             _ => throw new ArgumentOutOfRangeException()
         };
 
@@ -2109,7 +2117,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             Model.Gpt3 or Model.Gpt4 or Model.Custom => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
                 message, messageText, cancellationToken),
-            Model.Claude3Opus => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
+            Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
                 cancellationToken),
             _ => await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken),
         };
@@ -2192,7 +2200,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             Messages = chatMessages,
             MaxTokens = 4090,
-            Model = storeUser.Model == Model.Claude3Opus ? AnthropicModels.Claude3Opus : AnthropicModels.Claude3Sonnet,
+            Model = storeUser.Model switch
+            {
+                Model.Claude3Sonnet => AnthropicModels.Claude3Sonnet,
+                Model.Claude3Opus => AnthropicModels.Claude3Opus,
+                Model.Claude3Haiku => "claude-3-haiku-20240307",
+                _ => "claude-3-haiku-20240307"
+            },
             Stream = false,
             Temperature = 1.0m,
         };
