@@ -908,10 +908,15 @@ public class UpdateHandler : IUpdateHandler
             return;
         }
         
-        if ((storeUser!.Model == Model.Gpt3 || storeUser.Model == Model.Gpt4 || storeUser.Model == Model.Claude3Opus) == false)
+        if ((storeUser!.Model == Model.Gpt3 ||
+             storeUser.Model == Model.Gpt4 ||
+             storeUser.Model == Model.Claude3Opus ||
+             storeUser.Model == Model.Claude3Haiku ||
+             storeUser.Model == Model.Claude3Sonnet) ==
+            false)
         {
             await client.SendTextMessageAsync(message.Chat.Id,
-                "Error: you must use OpenAI GPT3 or GPT4 or Anthropic Claude Opus models in order to analyze pictures.",
+                "Error: you must use OpenAI GPT3 or GPT4 or Anthropic Claude Opus or Claude Haiku or Claude Sonnet models in order to analyze pictures.",
                 cancellationToken: cancellationToken);
             return;
         }
@@ -1012,6 +1017,8 @@ public class UpdateHandler : IUpdateHandler
                     await GetVisionResponseFromOpenAiModel(client, message, storeUser, base64Image, cancellationToken);
                 break;
             }
+            case Model.Claude3Haiku:
+            case Model.Claude3Sonnet:
             case Model.Claude3Opus:
             {
                 visionModelResponse =
@@ -1062,7 +1069,13 @@ public class UpdateHandler : IUpdateHandler
         {
             Messages = messages,
             MaxTokens = 4090,
-            Model = AnthropicModels.Claude3Opus,
+            Model = storeUser.Model switch
+            {
+                Model.Claude3Sonnet => AnthropicModels.Claude3Sonnet,
+                Model.Claude3Opus => AnthropicModels.Claude3Opus,
+                Model.Claude3Haiku => "claude-3-haiku-20240307",
+                _ => "claude-3-haiku-20240307"
+            },
             Stream = false,
             Temperature = 1.0m,
         };
