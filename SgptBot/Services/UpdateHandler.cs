@@ -2655,7 +2655,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                     "/allow - allow user\n" +
                     "/deny - deny user\n" +
                     "/users - show active users\n" +
-                    "/all_users - show all users";
+                    "/all_users - show all users\n" +
+                    "/service - make a service action";
         }
 
         return await botClient.SendTextMessageAsync(
