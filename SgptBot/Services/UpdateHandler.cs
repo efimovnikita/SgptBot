@@ -193,48 +193,12 @@ public class UpdateHandler : IUpdateHandler
             "/summarize"             => SummarizeCommand(message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
-            "/service"               => ServiceCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
     }
-
-    private async Task<Message> ServiceCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
-    {
-        StoreUser? storeUser = GetStoreUser(message.From);
-        if (storeUser == null)
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
-                cancellationToken: cancellationToken);
-        }
-        
-        if (storeUser.IsAdministrator == false)
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, 
-                "This command might be executed only by the administrator.",
-                cancellationToken: cancellationToken);
-        }
-
-        var usersWithCustomModel = _userRepository.GetAllUsers()
-            .Where(user => user.Model == Model.Custom)
-            .ToArray();
-        
-        await botClient.SendTextMessageAsync(message.Chat.Id, 
-            $"The number of users with the custom model is '{usersWithCustomModel.Length}'.",
-            cancellationToken: cancellationToken);
-        
-        foreach (var user in usersWithCustomModel)
-        {
-            user.Model = Model.Gpt3;
-            _userRepository.UpdateUser(user);
-        }
-        
-        return await botClient.SendTextMessageAsync(message.Chat.Id, 
-            "This command finished successfully.",
-            cancellationToken: cancellationToken);
-    }
-
+    
     private async Task<Message> ResetKeyClaudeCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
@@ -1930,8 +1894,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton gpt3Button = new("OpenAI GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
         InlineKeyboardButton gpt4Button = new("OpenAI GPT-4 Turbo") { CallbackData = "/model gpt4"};
         InlineKeyboardButton claudeButton = new("Anthropic Claude 2.1") { CallbackData = "/model claude21"};
-        // string customModelName = $"{GetCapitalizedModelName()}";
-        // InlineKeyboardButton customButton = new(customModelName) {CallbackData = "/model custom"};
         InlineKeyboardButton claude3OpusButton = new("Anthropic Claude 3 Opus") { CallbackData = "/model claude3opus"};
         InlineKeyboardButton claude3SonnetButton = new("Anthropic Claude 3 Sonnet") { CallbackData = "/model claude3sonnet"};
         InlineKeyboardButton claude3HaikuButton = new("Anthropic Claude 3 Haiku") { CallbackData = "/model claude3haiku"};
@@ -1939,13 +1901,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton[] row1 = [gpt3Button];
         InlineKeyboardButton[] row2 = [gpt4Button];
         InlineKeyboardButton[] row3 = [claudeButton];
-        // InlineKeyboardButton[] row4 = [customButton];
         InlineKeyboardButton[] row5 = [claude3OpusButton];
         InlineKeyboardButton[] row6 = [claude3SonnetButton];
         InlineKeyboardButton[] row7 = [claude3HaikuButton];
             
         // Buttons by rows
-        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7, /*row4*/];
+        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7];
     
         // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
@@ -1986,8 +1947,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             modelName.ToLower().Equals("claude21") == false &&
             modelName.ToLower().Equals("claude3opus") == false &&
             modelName.ToLower().Equals("claude3sonnet") == false &&
-            modelName.ToLower().Equals("claude3haiku") == false/* &&
-            modelName.ToLower().Equals("custom") == false*/)
+            modelName.ToLower().Equals("claude3haiku") == false)
         {
             return await botClient.SendTextMessageAsync(chatId,
                 "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet' or 'claude3haiku'.\nTry again.",
@@ -2002,7 +1962,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             "claude3opus" => Model.Claude3Opus,
             "claude3sonnet" => Model.Claude3Sonnet,
             "claude3haiku" => Model.Claude3Haiku,
-            // "custom" => Model.Custom,
             _ => Model.Gpt3
         };
 
@@ -2017,7 +1976,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Claude3Sonnet => "Claude 3 Sonnet",
             Model.Claude3Opus => "Claude 3 Opus",
             Model.Claude3Haiku => "Claude 3 Haiku",
-            // Model.Custom => $"{GetCapitalizedModelName()}",
             _ => throw new ArgumentOutOfRangeException()
         };
         
@@ -2049,7 +2007,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Gpt3 => "GPT-3.5 Turbo",
             Model.Gpt4 => "GPT-4 Turbo",
             Model.Claude21 => "Claude 2.1",
-            Model.Custom => GetCapitalizedModelName(),
             Model.Claude3Sonnet => "Claude 3 Sonnet",
             Model.Claude3Opus => "Claude 3 Opus",
             Model.Claude3Haiku => "Claude 3 Haiku",
@@ -2072,12 +2029,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? "_<empty>_"}",
             parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
-    }
-
-    private static string GetCapitalizedModelName()
-    {
-        string variable = Environment.GetEnvironmentVariable("CUSTOMMODELNAME")!;
-        return Char.ToUpper(variable[0]) + variable[1..];
     }
 
     private async Task<Message> ResetConversationCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -2162,7 +2113,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         string? response = storeUser!.Model switch
         {
-            Model.Gpt3 or Model.Gpt4 or Model.Custom => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
+            Model.Gpt3 or Model.Gpt4 => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
                 message, messageText, cancellationToken),
             Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
                 cancellationToken),
@@ -2387,13 +2338,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         string messageText,
         CancellationToken cancellationToken)
     {
-        OpenAiApi api = new(storeUser.Model == Model.Custom ? "" :storeUser.ApiKey);
-        
-        if (storeUser.Model == Model.Custom)
-        {
-            string customModelApi = Environment.GetEnvironmentVariable("CUSTOMMODELAPI")!;
-            api.ApiUrlFormat = $"{customModelApi}/{{0}}/{{1}}";
-        }
+        OpenAiApi api = new(storeUser.ApiKey);
         
         List<ChatMessage> chatMessages = [];
 
@@ -2414,7 +2359,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             Model = storeUser.Model switch
             {
-                Model.Custom => Environment.GetEnvironmentVariable("CUSTOMMODELNAME"),
                 Model.Gpt3 => OpenAiNg.Models.Model.ChatGPTTurbo1106,
                 _ => OpenAiNg.Models.Model.GPT4_1106_Preview
             },
