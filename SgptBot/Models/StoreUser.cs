@@ -29,7 +29,7 @@ public class StoreUser
     public bool IsAdministrator { get; set; }
     public string ApiKey { get; set; }
     public List<Message> Conversation { get; set; } = [];
-    public Model Model { get; set; } = Model.Custom;
+    public Model Model { get; set; } = Model.Gpt3;
     public bool IsBlocked { get; set; }
     public bool VoiceMode { get; set; }
     public ImgQuality ImgQuality { get; set; } = ImgQuality.Standard;
