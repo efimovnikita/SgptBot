@@ -193,10 +193,46 @@ public class UpdateHandler : IUpdateHandler
             "/summarize"             => SummarizeCommand(message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
+            "/service"               => ServiceCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ServiceCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (storeUser.IsAdministrator == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "This command might be executed only by the administrator.",
+                cancellationToken: cancellationToken);
+        }
+
+        var usersWithCustomModel = _userRepository.GetAllUsers()
+            .Where(user => user.Model == Model.Custom)
+            .ToArray();
+        
+        await botClient.SendTextMessageAsync(message.Chat.Id, 
+            $"The number of users with the custom model is '{usersWithCustomModel.Length}'.",
+            cancellationToken: cancellationToken);
+        
+        foreach (var user in usersWithCustomModel)
+        {
+            user.Model = Model.Gpt3;
+            _userRepository.UpdateUser(user);
+        }
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            "This command finished successfully.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ResetKeyClaudeCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -1894,8 +1930,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton gpt3Button = new("OpenAI GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
         InlineKeyboardButton gpt4Button = new("OpenAI GPT-4 Turbo") { CallbackData = "/model gpt4"};
         InlineKeyboardButton claudeButton = new("Anthropic Claude 2.1") { CallbackData = "/model claude21"};
-        string customModelName = $"{GetCapitalizedModelName()}";
-        InlineKeyboardButton customButton = new(customModelName) {CallbackData = "/model custom"};
+        // string customModelName = $"{GetCapitalizedModelName()}";
+        // InlineKeyboardButton customButton = new(customModelName) {CallbackData = "/model custom"};
         InlineKeyboardButton claude3OpusButton = new("Anthropic Claude 3 Opus") { CallbackData = "/model claude3opus"};
         InlineKeyboardButton claude3SonnetButton = new("Anthropic Claude 3 Sonnet") { CallbackData = "/model claude3sonnet"};
         InlineKeyboardButton claude3HaikuButton = new("Anthropic Claude 3 Haiku") { CallbackData = "/model claude3haiku"};
@@ -1903,13 +1939,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton[] row1 = [gpt3Button];
         InlineKeyboardButton[] row2 = [gpt4Button];
         InlineKeyboardButton[] row3 = [claudeButton];
-        InlineKeyboardButton[] row4 = [customButton];
+        // InlineKeyboardButton[] row4 = [customButton];
         InlineKeyboardButton[] row5 = [claude3OpusButton];
         InlineKeyboardButton[] row6 = [claude3SonnetButton];
         InlineKeyboardButton[] row7 = [claude3HaikuButton];
             
         // Buttons by rows
-        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7, row4];
+        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7, /*row4*/];
     
         // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
@@ -1929,8 +1965,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             5) Claude 3 Sonnet strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers.
             
             6) Claude 3 Haiku, the fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications.
-            
-            7) Custom Open-Source Large Language Model. The final choice will be made by admin.
             """,
             replyMarkup: inlineKeyboard,
             cancellationToken: cancellationToken);
@@ -1952,11 +1986,11 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             modelName.ToLower().Equals("claude21") == false &&
             modelName.ToLower().Equals("claude3opus") == false &&
             modelName.ToLower().Equals("claude3sonnet") == false &&
-            modelName.ToLower().Equals("claude3haiku") == false &&
-            modelName.ToLower().Equals("custom") == false)
+            modelName.ToLower().Equals("claude3haiku") == false/* &&
+            modelName.ToLower().Equals("custom") == false*/)
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet', 'claude3haiku' or 'custom'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet' or 'claude3haiku'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -1968,7 +2002,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             "claude3opus" => Model.Claude3Opus,
             "claude3sonnet" => Model.Claude3Sonnet,
             "claude3haiku" => Model.Claude3Haiku,
-            "custom" => Model.Custom,
+            // "custom" => Model.Custom,
             _ => Model.Gpt3
         };
 
@@ -1983,7 +2017,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Claude3Sonnet => "Claude 3 Sonnet",
             Model.Claude3Opus => "Claude 3 Opus",
             Model.Claude3Haiku => "Claude 3 Haiku",
-            Model.Custom => $"{GetCapitalizedModelName()}",
+            // Model.Custom => $"{GetCapitalizedModelName()}",
             _ => throw new ArgumentOutOfRangeException()
         };
         
