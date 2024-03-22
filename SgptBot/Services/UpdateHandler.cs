@@ -232,10 +232,30 @@ public class UpdateHandler : IUpdateHandler
             cancellationToken: cancellationToken);
     }
 
-    private async Task<Message> VersionCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    private static async Task<Message> VersionCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
+        const string name = "LLM Bot";
+        string version = GetVersionWithDateTime();
+        string msg = $"""
+                       🤖 *{name} v.{version} Update* 🚀
+
+                       Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
+
+                       ✨ **New Features**:
+                       - *MP3 files support*: Now bot can receive a mp3 file and will be able to extract the transcript from this file.
+
+                       👉 To enjoy the new features, make sure you're using the latest version of *{name}*.
+
+                       💬 *Feedback*:
+                       We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use /contact command).
+
+                       Stay tuned for more updates, and thank you for using *{name}*!
+                       """;
+        
         return await botClient.SendTextMessageAsync(message.Chat.Id,
-            GetVersionWithDateTime(),
+            msg,
+            parseMode: ParseMode.Markdown,
+            disableNotification: true,
             cancellationToken: cancellationToken);
     }
 
