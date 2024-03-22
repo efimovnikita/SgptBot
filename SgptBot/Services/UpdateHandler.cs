@@ -241,11 +241,12 @@ public class UpdateHandler : IUpdateHandler
 
                        Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
-                       ✨ **New Features**:
-                       - *MP3 files support*: Now bot can receive a mp3 file and will be able to extract the transcript from this file.
+                       ✨ *New Features*:
+                       - MP3 files support: Now bot can receive a mp3 file and will be able to extract the transcript from this file.
 
-                       👉 To enjoy the new features, make sure you're using the latest version of *{name}*.
-
+                       🔧 *Improvements*:
+                       - The version command improvements: Now, using the version (/version) command You can get the brief overview about the current version of this bot.
+                       
                        💬 *Feedback*:
                        We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use /contact command).
 
