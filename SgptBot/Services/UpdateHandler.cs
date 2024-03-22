@@ -45,7 +45,7 @@ public class UpdateHandler : IUpdateHandler
     private readonly IVectorStoreMiddleware _vectorStoreMiddleware;
     private readonly ISummarizationProvider _summarizationProvider;
     private readonly ITokenizer _tokenizer;
-    private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf"];
+    private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf", ".mp3"];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware, ISummarizationProvider summarizationProvider)
@@ -124,9 +124,10 @@ public class UpdateHandler : IUpdateHandler
         
         StoreUser? storeUser = GetStoreUser(message.From);
         
-        if (messageType == MessageType.Document)
+        if (messageType is MessageType.Document or MessageType.Audio)
         {
-            string? textFromDocumentMessage = await GetTextFromDocumentMessage(message, client, cancellationToken);
+            string? textFromDocumentMessage = await GetTextFromDocumentMessage(message, client, message.Chat.Id,
+                cancellationToken);
             if (storeUser is {ContextFilterMode: false})
             {
                 messageText = textFromDocumentMessage + (String.IsNullOrEmpty(message.Caption) == false
@@ -570,7 +571,8 @@ public class UpdateHandler : IUpdateHandler
             cancellationToken: cancellationToken);
     }
 
-    private async Task<string?> GetTextFromDocumentMessage(Message message, ITelegramBotClient client, CancellationToken cancellationToken)
+    private async Task<string?> GetTextFromDocumentMessage(Message message, ITelegramBotClient client, long chatId,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -583,18 +585,31 @@ public class UpdateHandler : IUpdateHandler
                 return "";
             }
 
-            Document? document = message.Document;
-            if (document == null)
+            string fileName = "";
+            string documentFileId = "";
+
+            if (message.Document != null)
             {
-                return "";
+                var document = message.Document;
+                
+                fileName = document.FileName ?? "";
+                documentFileId = document.FileId;
             }
-        
-            if (String.IsNullOrEmpty(document.FileName))
+            
+            if (message.Audio != null)
+            {
+                var audio = message.Audio;
+
+                fileName = audio.FileName ?? "";
+                documentFileId = audio.FileId;
+            }
+
+            if (String.IsNullOrEmpty(fileName))
             {
                 return "";
             }
 
-            string extension = Path.GetExtension(document.FileName);
+            string extension = Path.GetExtension(fileName);
             if (_allowedExtensions.Contains(extension) == false)
             {
                 string extensions = String.Join(", ", _allowedExtensions);
@@ -603,11 +618,11 @@ public class UpdateHandler : IUpdateHandler
                     cancellationToken: cancellationToken);
                 return "";
             }
-
-            File file = await client.GetFileAsync(document.FileId, cancellationToken: cancellationToken);
+            
+            File file = await client.GetFileAsync(documentFileId, cancellationToken: cancellationToken);
 
             string path = Path.GetTempPath();
-            string fullDocumentFileName = Path.Combine(path, document.FileName);
+            string fullDocumentFileName = Path.Combine(path, fileName);
 
             if (file.FilePath != null)
             {
@@ -627,12 +642,15 @@ public class UpdateHandler : IUpdateHandler
             string text = extension == ".zip"
                 ? await GetTextFromFilesInsideZipArchive(fullDocumentFileName, cancellationToken)
                 : await System.IO.File.ReadAllTextAsync(fullDocumentFileName, cancellationToken);
-            
-            if (extension is ".html" or ".htm")
+
+            text = extension switch
             {
-                text = ExtractPlainTextFromHtmDoc(text);
-            }
-            
+                ".html" or ".htm" => ExtractPlainTextFromHtmDoc(text),
+                ".mp3" => await GetTextFromAudioFile(client, fullDocumentFileName, storeUser, chatId,
+                    cancellationToken),
+                _ => text
+            };
+
             return text;
         }
         catch (Exception e)
@@ -640,6 +658,30 @@ public class UpdateHandler : IUpdateHandler
             _logger.LogWarning("[{MethodName}] {Error}", nameof(GetTextFromDocumentMessage), e.Message);
             return "";
         }
+    }
+
+    private async Task<string> GetTextFromAudioFile(ITelegramBotClient client,
+        string path, StoreUser? storeUser, long chatId, CancellationToken cancellationToken)
+    {
+        string transcriptFromAudio = await _youtubeTextProcessor.GetTextFromAudioFileAsync(path,
+            storeUser!.ApiKey);
+        if (String.IsNullOrEmpty(transcriptFromAudio))
+        {
+            return "";
+        }
+
+        await SendDocumentResponseAsync(transcriptFromAudio, client, chatId, storeUser.Id,
+            cancellationToken, "This is your transcript \ud83d\udc46");
+
+        return $"""
+                This is the transcript from my audio file:
+
+                ######
+                {transcriptFromAudio}
+                ######
+
+                I want to ask you about this transcript... Wait for my question. Just say - 'Ask me about this transcript...'
+                """;
     }
 
     private string ExtractPlainTextFromHtmDoc(string text)
