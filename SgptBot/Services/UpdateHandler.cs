@@ -12,6 +12,8 @@ using Humanizer;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using LikhodedDynamics.Sber.GigaChatSDK;
+using LikhodedDynamics.Sber.GigaChatSDK.Models;
 using Microsoft.DeepDev;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -29,8 +31,10 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using Data = OpenAiNg.Images.Data;
 using File = Telegram.Bot.Types.File;
 using Message = Telegram.Bot.Types.Message;
+using Model = SgptBot.Models.Model;
 
 namespace SgptBot.Services;
 
@@ -171,6 +175,8 @@ public class UpdateHandler : IUpdateHandler
             "/reset_key"             => ResetKeyCommand(_botClient, message, cancellationToken),
             "/key_claude"            => SetKeyClaudeCommand(_botClient, message, cancellationToken),
             "/reset_key_claude"      => ResetKeyClaudeCommand(_botClient, message, cancellationToken),
+            "/key_gigachat"          => SetKeyGigaChatCommand(_botClient, message, cancellationToken),
+            "/reset_key_gigachat"    => ResetKeyGigaChatCommand(_botClient, message, cancellationToken),
             "/reset"                 => ResetConversationCommand(_botClient, message, cancellationToken),
             "/info"                  => InfoCommand(message, cancellationToken),
             "/model"                 => ModelCommand(_botClient, message, cancellationToken),
@@ -199,7 +205,55 @@ public class UpdateHandler : IUpdateHandler
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
     }
-    
+
+    private async Task<Message> ResetKeyGigaChatCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.GigaChatApiKey = "";
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Sber Auth key was reset.",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> SetKeyGigaChatCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_gigachat' command you must input your Sber Auth key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string apiKey = strings[1];
+        if (String.IsNullOrWhiteSpace(apiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_gigachat' command you must input your Sber Auth key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.GigaChatApiKey = apiKey;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Sber Auth key was set.",
+            cancellationToken: cancellationToken);
+    }
+
     private async Task<Message> ResetKeyClaudeCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
@@ -242,10 +296,7 @@ public class UpdateHandler : IUpdateHandler
                        Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
                        ✨ *New Features*:
-                       - MP3 files support: Now bot can receive a mp3 file and will be able to extract the transcript from this file.
-
-                       🔧 *Improvements*:
-                       - The version command improvements: Now, using the version (/version) command You can get the brief overview about the current version of this bot.
+                       - Added Sber GigaChat models: Now the bot can work with the Sber GigaChat model. Three versions of this model are available.
                        
                        💬 *Feedback*:
                        We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use /contact command).
@@ -947,6 +998,10 @@ public class UpdateHandler : IUpdateHandler
             case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your Claude API key is not set. Use '/key_claude' command and set key.");
+                return false;
+            case Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro when String.IsNullOrWhiteSpace(user.GigaChatApiKey):
+                await client.SendTextMessageAsync(chatId,
+                    "Your GigaChat Auth key is not set. Use '/key_gigachat' command and set key.");
                 return false;
         }
 
@@ -1960,6 +2015,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton claude3OpusButton = new("Anthropic Claude 3 Opus") { CallbackData = "/model claude3opus"};
         InlineKeyboardButton claude3SonnetButton = new("Anthropic Claude 3 Sonnet") { CallbackData = "/model claude3sonnet"};
         InlineKeyboardButton claude3HaikuButton = new("Anthropic Claude 3 Haiku") { CallbackData = "/model claude3haiku"};
+        InlineKeyboardButton gigaChatLiteButton = new("Sber GigaChat Lite") { CallbackData = "/model gigachatlite"};
+        InlineKeyboardButton gigaChatLitePlusButton = new("Sber GigaChat Lite+") { CallbackData = "/model gigachatliteplus"};
+        InlineKeyboardButton gigaChatProButton = new("Sber GigaChat Pro") { CallbackData = "/model gigachatpro"};
         
         InlineKeyboardButton[] row1 = [gpt3Button];
         InlineKeyboardButton[] row2 = [gpt4Button];
@@ -1967,9 +2025,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton[] row5 = [claude3OpusButton];
         InlineKeyboardButton[] row6 = [claude3SonnetButton];
         InlineKeyboardButton[] row7 = [claude3HaikuButton];
+        InlineKeyboardButton[] row8 = [gigaChatLiteButton];
+        InlineKeyboardButton[] row9 = [gigaChatLitePlusButton];
+        InlineKeyboardButton[] row10 = [gigaChatProButton];
             
         // Buttons by rows
-        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7];
+        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7, row8, row9, row10];
     
         // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
@@ -1978,19 +2039,26 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             """
             Select the model that you want to use.
 
-            1) GPT-3.5 models can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family.
+            1) *GPT-3.5* models can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family.
             
-            2) GPT-4 is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities.
+            2) *GPT-4 Turbo* is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities.
             
-            3) Claude 2 is a language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages.
+            3) *Claude 2.1* is a language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages.
             
-            4) Claude 3 Opus is a powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding.
+            4) *Claude 3 Opus* is a powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding.
             
-            5) Claude 3 Sonnet strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers.
+            5) *Claude 3 Sonnet* strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers.
             
-            6) Claude 3 Haiku, the fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications.
+            6) *Claude 3 Haiku*, the fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications.
+            
+            7) *Sber GigaChat Lite* model is suitable for solving simpler tasks that require maximum operating speed.
+            
+            8) *Sber GigaChat Lite+* model is suitable for tasks that require processing large amounts of data. For example: summarization of articles or call transcriptions, extraction of information from documents.
+            
+            9) *Sber GigaChat Pro* model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues.
             """,
             replyMarkup: inlineKeyboard,
+            parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
     }
 
@@ -2010,10 +2078,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             modelName.ToLower().Equals("claude21") == false &&
             modelName.ToLower().Equals("claude3opus") == false &&
             modelName.ToLower().Equals("claude3sonnet") == false &&
-            modelName.ToLower().Equals("claude3haiku") == false)
+            modelName.ToLower().Equals("claude3haiku") == false &&
+            modelName.ToLower().Equals("gigachatlite") == false &&
+            modelName.ToLower().Equals("gigachatliteplus") == false &&
+            modelName.ToLower().Equals("gigachatpro") == false)
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet' or 'claude3haiku'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet', 'claude3haiku', 'gigachatlite', 'gigachatliteplus' or 'gigachatpro'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -2025,13 +2096,26 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             "claude3opus" => Model.Claude3Opus,
             "claude3sonnet" => Model.Claude3Sonnet,
             "claude3haiku" => Model.Claude3Haiku,
+            "gigachatlite" => Model.GigaChatLite,
+            "gigachatliteplus" => Model.GigaChatLitePlus,
+            "gigachatpro" => Model.GigaChatPro,
             _ => Model.Gpt3
         };
 
         storeUser.Model = selectedModel;
         _userRepository.UpdateUser(storeUser);
 
-        string mName = selectedModel switch
+        string mName = GetModelName(selectedModel);
+        
+        return await botClient.SendTextMessageAsync(
+            chatId, 
+            $"Model '{mName}' was set.",
+            cancellationToken: cancellationToken);
+    }
+
+    private static string GetModelName(Model selectedModel)
+    {
+        return selectedModel switch
         {
             Model.Gpt3 => "GPT-3.5 Turbo",
             Model.Gpt4 => "GPT-4 Turbo",
@@ -2039,13 +2123,11 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.Claude3Sonnet => "Claude 3 Sonnet",
             Model.Claude3Opus => "Claude 3 Opus",
             Model.Claude3Haiku => "Claude 3 Haiku",
+            Model.GigaChatLite => "GigaChat Lite",
+            Model.GigaChatLitePlus => "GigaChat Lite+",
+            Model.GigaChatPro => "GigaChat Pro",
             _ => throw new ArgumentOutOfRangeException()
         };
-        
-        return await botClient.SendTextMessageAsync(
-            chatId, 
-            $"Model '{mName}' was set.",
-            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> InfoCommand(Message message, CancellationToken cancellationToken)
@@ -2065,16 +2147,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         int tokenCount = GetTokenCount(builder.ToString());
         
-        string mName = storeUser.Model switch
-        {
-            Model.Gpt3 => "GPT-3.5 Turbo",
-            Model.Gpt4 => "GPT-4 Turbo",
-            Model.Claude21 => "Claude 2.1",
-            Model.Claude3Sonnet => "Claude 3 Sonnet",
-            Model.Claude3Opus => "Claude 3 Opus",
-            Model.Claude3Haiku => "Claude 3 Haiku",
-            _ => throw new ArgumentOutOfRangeException()
-        };
+        string mName = GetModelName(storeUser.Model);
 
         return await _botClient.SendTextMessageAsync(message.Chat.Id,
             $"First name: `{storeUser.FirstName}`\n" +
@@ -2082,6 +2155,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Username: `{storeUser.UserName}`\n" +
             $"OpenAI API key: `{storeUser.ApiKey}`\n" +
             $"Claude API key: `{storeUser.ClaudeApiKey}`\n" +
+            $"GigaChat API key: `{storeUser.GigaChatApiKey}`\n" +
             $"Model: `{mName}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
             $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
@@ -2180,6 +2254,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 message, messageText, cancellationToken),
             Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
                 cancellationToken),
+            Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
+                botClient, storeUser, message, messageText, cancellationToken),
             _ => await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken),
         };
         
@@ -2234,6 +2310,50 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 replyToMessageId: message.MessageId,
                 cancellationToken: cancellationToken);
         }
+    }
+
+    private async Task<string?> GetResponseFromGigaChatModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, CancellationToken cancellationToken)
+    {
+        var gigaChat = new GigaChat(storeUser.GigaChatApiKey, false, true, false);
+        await gigaChat.CreateTokenAsync();
+        
+        List<MessageContent> chatMessages = [];
+        foreach (Models.Message msg in storeUser.Conversation.Where(m => m.Role != Role.System))
+        {
+            var item = new MessageContent(msg.Role == Role.Ai ? "assistant" : "user", msg.Msg);
+            chatMessages.Add(item);
+        }
+
+        chatMessages.Add(new MessageContent("user", messageText));
+        
+        string model = storeUser.Model switch
+        {
+            Model.GigaChatLite => "GigaChat",
+            Model.GigaChatLitePlus => "GigaChat-Plus",
+            Model.GigaChatPro => "GigaChat-Pro",
+            _ => "GigaChat"
+        };
+
+        var messageQuery = new MessageQuery(chatMessages, model);
+
+        Response? messageResponse;
+        try
+        {
+            messageResponse = await gigaChat.CompletionsAsync(messageQuery);
+        }
+        catch (Exception e)
+        {
+            await SendBotResponseDependingOnMsgLength(msg: e.Message,
+                client: botClient,
+                chatId: message.Chat.Id,
+                userId: storeUser.Id,
+                cancellationToken: cancellationToken,
+                replyMsgId: message.MessageId);
+
+            return "";
+        }
+
+        return messageResponse?.choices!.FirstOrDefault()?.message?.content ?? "";
     }
 
     private async Task<string?> GetResponseFromClaude3Model(ITelegramBotClient botClient, StoreUser storeUser,
@@ -2635,6 +2755,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/reset_key - reset an OpenAI API key\n" +
                        "/key_claude - set an Anthropic Claude API key\n" +
                        "/reset_key_claude - reset an Anthropic Claude API key\n" +
+                       "/key_gigachat - set a Sber Auth key\n" +
+                       "/reset_key_gigachat - reset a Sber Auth key\n" +
                        "/model - choose the GPT model to work with\n" +
                        "/context - set the context message\n" +
                        "/contact - contact the bot admin\n" +

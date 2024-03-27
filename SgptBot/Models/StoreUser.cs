@@ -37,6 +37,7 @@ public class StoreUser
     public DateTime ActivityTime { get; set; } = new(2020, 1, 1, 1, 00, 00);
     public bool AnewMode { get; set; }
     public string ClaudeApiKey { get; set; }
+    public string GigaChatApiKey { get; set; }
     public List<Message> History { get; set; } = [];
     public bool ContextFilterMode { get; set; }
     public List<VectorMemoryItem> MemoryStorage { get; set; } = [];
