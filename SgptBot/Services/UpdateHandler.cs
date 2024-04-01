@@ -735,6 +735,18 @@ public class UpdateHandler : IUpdateHandler
     private async Task<string> GetTextFromAudioFile(ITelegramBotClient client,
         string path, StoreUser? storeUser, long chatId, CancellationToken cancellationToken)
     {
+        // Check file size
+        long maxFileSizeBytes = 19 * 1024 * 1024; // 19 MB in bytes
+        var fileInfo = new FileInfo(path);
+        if (fileInfo.Length > maxFileSizeBytes)
+        {
+            await client.SendTextMessageAsync(chatId,
+                $"The audio file size exceeds the maximum allowed limit of 19 MB.",
+                cancellationToken: cancellationToken);
+
+            return "";
+        }
+
         string transcriptFromAudio = await _youtubeTextProcessor.GetTextFromAudioFileAsync(path,
             storeUser!.ApiKey);
         if (String.IsNullOrEmpty(transcriptFromAudio))
