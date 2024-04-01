@@ -727,6 +727,10 @@ public class UpdateHandler : IUpdateHandler
         }
         catch (Exception e)
         {
+            await client.SendTextMessageAsync(chatId,
+                e.Message,
+                cancellationToken: cancellationToken);
+
             _logger.LogWarning("[{MethodName}] {Error}", nameof(GetTextFromDocumentMessage), e.Message);
             return "";
         }
