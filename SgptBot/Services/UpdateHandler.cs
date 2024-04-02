@@ -2160,7 +2160,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         StringBuilder builder = new();
-        foreach (SgptBot.Models.Message msg in storeUser.Conversation)
+        foreach (Models.Message msg in storeUser.Conversation)
         {
             builder.Append(msg.Msg);
         }
@@ -2215,7 +2215,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         _userRepository.UpdateUser(storeUser);
         
         StringBuilder builder = new();
-        foreach (SgptBot.Models.Message msg in storeUser.Conversation)
+        foreach (Models.Message msg in storeUser.Conversation)
         {
             builder.Append(msg.Msg);
         }
@@ -2626,7 +2626,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return $"This is the transcript from my web link:\n\n######\n{transcriptFromLink}\n######\n\nI want to ask you about this transcript... Wait for my question. Just say - 'Ask me about this transcript...'";
     }
 
-    private Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
+    private static Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
         long chatId,
         long userId, CancellationToken cancellationToken, int? replyMsgId = null, ParseMode? parseMode = null)
     {
