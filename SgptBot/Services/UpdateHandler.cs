@@ -739,10 +739,7 @@ public class UpdateHandler : IUpdateHandler
     private async Task<string> GetTextFromAudioFile(ITelegramBotClient client,
         string path, StoreUser? storeUser, long chatId, CancellationToken cancellationToken)
     {
-        // Check file size
-        long maxFileSizeBytes = 19 * 1024 * 1024; // 19 MB in bytes
-        var fileInfo = new FileInfo(path);
-        if (fileInfo.Length > maxFileSizeBytes)
+        if (IsFileSizeMoreThanLimit(path))
         {
             await client.SendTextMessageAsync(chatId,
                 $"The audio file size exceeds the maximum allowed limit of 19 MB.",
@@ -770,6 +767,13 @@ public class UpdateHandler : IUpdateHandler
 
                 I want to ask you about this transcript... Wait for my question. Just say - 'Ask me about this transcript...'
                 """;
+    }
+
+    private static bool IsFileSizeMoreThanLimit(string path)
+    {
+        long maxFileSizeBytes = 19 * 1024 * 1024; // 19 MB in bytes
+        var fileInfo = new FileInfo(path);
+        return fileInfo.Length > maxFileSizeBytes;
     }
 
     private string ExtractPlainTextFromHtmDoc(string text)
