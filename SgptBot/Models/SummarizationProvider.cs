@@ -60,7 +60,7 @@ public class SummarizationProvider : ISummarizationProvider
                 
                 _logger.LogInformation(
                     message: "The paragraph with length '{ParagraphLength}' was processed. The summary length is '{Length}'...",
-                    args: new object?[] { paragraph.Length, summary.Length });
+                    args: [paragraph.Length, summary.Length]);
 
                 return summary;
             }).ToList();

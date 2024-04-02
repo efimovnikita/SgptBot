@@ -355,7 +355,7 @@ public class UpdateHandler : IUpdateHandler
         }
 
         StringBuilder builder = new();
-        foreach (SgptBot.Models.Message msg in storeUser!.Conversation.Where(m => m.Role != Role.System))
+        foreach (Models.Message msg in storeUser!.Conversation.Where(m => m.Role != Role.System))
         {
             builder.AppendLine($"{(msg.Role == Role.User ? "USER:\n" : "AI:\n")}{msg.Msg}");
         }
