@@ -152,8 +152,8 @@ public class UpdateHandler : IUpdateHandler
             storeUser: storeUser!,
             cancellationToken: cancellationToken);
         
-        if (await StoreUrlTranscriptInMemory(message, client, cancellationToken, processedMsg, messageText,
-                storeUser)) return;
+        if (await StoreUrlTranscriptInMemory(message, client, processedMsg, messageText, storeUser,
+                cancellationToken)) return;
         
         messageText = processedMsg;
 
@@ -331,7 +331,7 @@ public class UpdateHandler : IUpdateHandler
     }
 
     private async Task<bool> StoreUrlTranscriptInMemory(Message message, ITelegramBotClient client,
-        CancellationToken cancellationToken, string processedMsg, string? messageText, StoreUser? storeUser)
+        string processedMsg, string? messageText, StoreUser? storeUser, CancellationToken cancellationToken)
     {
         if (processedMsg.Equals(messageText, StringComparison.OrdinalIgnoreCase) ||
             processedMsg.Length <= messageText!.Length || !storeUser!.ContextFilterMode) return false;
