@@ -1211,8 +1211,8 @@ public class UpdateHandler : IUpdateHandler
             {
                 Model.Claude3Sonnet => AnthropicModels.Claude3Sonnet,
                 Model.Claude3Opus => AnthropicModels.Claude3Opus,
-                Model.Claude3Haiku => "claude-3-haiku-20240307",
-                _ => "claude-3-haiku-20240307"
+                Model.Claude3Haiku => AnthropicModels.Claude3Haiku,
+                _ => AnthropicModels.Claude3Haiku
             },
             Stream = false,
             Temperature = 1.0m,
@@ -2405,8 +2405,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             {
                 Model.Claude3Sonnet => AnthropicModels.Claude3Sonnet,
                 Model.Claude3Opus => AnthropicModels.Claude3Opus,
-                Model.Claude3Haiku => "claude-3-haiku-20240307",
-                _ => "claude-3-haiku-20240307"
+                Model.Claude3Haiku => AnthropicModels.Claude3Haiku,
+                _ => AnthropicModels.Claude3Haiku
             },
             Stream = false,
             Temperature = 1.0m,
