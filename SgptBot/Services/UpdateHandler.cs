@@ -349,7 +349,7 @@ public class UpdateHandler : IUpdateHandler
                        Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
                        ✨ *New Features*:
-                       - Added new Google Gemini 1.5 Pro model: Now the bot can work with the Google Gemini 1.5 Pro model. Try it out!.
+                       - Added new Google Gemini 1.5 Pro model: Now the bot can work with the Google Gemini 1.5 Pro model. Try it out!
                        
                        💬 *Feedback*:
                        We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use /contact command).
