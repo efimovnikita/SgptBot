@@ -48,11 +48,13 @@ public class UpdateHandler : IUpdateHandler
     private readonly IYoutubeTextProcessor _youtubeTextProcessor;
     private readonly IVectorStoreMiddleware _vectorStoreMiddleware;
     private readonly ISummarizationProvider _summarizationProvider;
+    private readonly IGeminiProvider _geminiProvider;
     private readonly ITokenizer _tokenizer;
     private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf", ".mp3"];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
-        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware, ISummarizationProvider summarizationProvider)
+        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware, 
+        ISummarizationProvider summarizationProvider, IGeminiProvider geminiProvider)
     {
         _botClient = botClient;
         _logger = logger;
@@ -61,6 +63,7 @@ public class UpdateHandler : IUpdateHandler
         _youtubeTextProcessor = youtubeTextProcessor;
         _vectorStoreMiddleware = vectorStoreMiddleware;
         _summarizationProvider = summarizationProvider;
+        _geminiProvider = geminiProvider;
         _tokenizer = TokenizerBuilder.CreateByModelNameAsync("gpt-4").Result;
     }
 
