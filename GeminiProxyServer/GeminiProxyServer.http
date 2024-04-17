@@ -1,0 +1,6 @@
+@GeminiProxyServer_HostAddress = http://localhost:5225
+
+GET {{GeminiProxyServer_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

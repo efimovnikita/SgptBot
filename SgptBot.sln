@@ -1,22 +1,27 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgptBot", "SgptBot\SgptBot.csproj", "{74F59239-C798-4F77-B6A7-65D9E6308202}"
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34714.143
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SgptBot", "SgptBot\SgptBot.csproj", "{74F59239-C798-4F77-B6A7-65D9E6308202}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesSplitter", "SubtitlesSplitter\SubtitlesSplitter.csproj", "{0304F683-BCB8-4154-8E11-9598A0C3B889}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SubtitlesSplitter", "SubtitlesSplitter\SubtitlesSplitter.csproj", "{0304F683-BCB8-4154-8E11-9598A0C3B889}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesApi", "SubtitlesApi\SubtitlesApi.csproj", "{D496D0B8-8841-449E-9A7E-2AB0658ECFFB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SubtitlesApi", "SubtitlesApi\SubtitlesApi.csproj", "{D496D0B8-8841-449E-9A7E-2AB0658ECFFB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubtitlesExtractorAndRewriter", "SubtitlesExtractorAndRewriter\SubtitlesExtractorAndRewriter.csproj", "{3EAA39E8-6843-495D-A59E-CCC1F8638237}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SubtitlesExtractorAndRewriter", "SubtitlesExtractorAndRewriter\SubtitlesExtractorAndRewriter.csproj", "{3EAA39E8-6843-495D-A59E-CCC1F8638237}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SemanticKernelTest", "SemanticKernelTest\SemanticKernelTest.csproj", "{D0927432-6A44-4870-BE26-D4BD3B3534BF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SemanticKernelTest", "SemanticKernelTest\SemanticKernelTest.csproj", "{D0927432-6A44-4870-BE26-D4BD3B3534BF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VectorStoreWebApi", "VectorStoreWebApi\VectorStoreWebApi.csproj", "{458666F2-EA92-4508-988B-5F79939EA437}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VectorStoreWebApi", "VectorStoreWebApi\VectorStoreWebApi.csproj", "{458666F2-EA92-4508-988B-5F79939EA437}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgptBot.Shared", "SgptBot.Shared\SgptBot.Shared.csproj", "{34FAF9CA-1007-4984-BC0B-C52545B3F1AD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SgptBot.Shared", "SgptBot.Shared\SgptBot.Shared.csproj", "{34FAF9CA-1007-4984-BC0B-C52545B3F1AD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TranscriptMiner", "TranscriptMiner\TranscriptMiner.csproj", "{626A2494-9293-48FD-86E6-7A6FF615F68C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TranscriptMiner", "TranscriptMiner\TranscriptMiner.csproj", "{626A2494-9293-48FD-86E6-7A6FF615F68C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QStarConsole", "QStarConsole\QStarConsole.csproj", "{A5044A6A-E255-4C9D-8F6C-4CCF591AE8C0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QStarConsole", "QStarConsole\QStarConsole.csproj", "{A5044A6A-E255-4C9D-8F6C-4CCF591AE8C0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeminiProxyServer", "GeminiProxyServer\GeminiProxyServer.csproj", "{41EDB8A0-FC88-4FFE-B2B3-BA4EE8371314}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -60,5 +65,15 @@ Global
 		{A5044A6A-E255-4C9D-8F6C-4CCF591AE8C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A5044A6A-E255-4C9D-8F6C-4CCF591AE8C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A5044A6A-E255-4C9D-8F6C-4CCF591AE8C0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{41EDB8A0-FC88-4FFE-B2B3-BA4EE8371314}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{41EDB8A0-FC88-4FFE-B2B3-BA4EE8371314}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{41EDB8A0-FC88-4FFE-B2B3-BA4EE8371314}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{41EDB8A0-FC88-4FFE-B2B3-BA4EE8371314}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FD8872CA-1645-46DF-80A7-670F53AC403A}
 	EndGlobalSection
 EndGlobal
