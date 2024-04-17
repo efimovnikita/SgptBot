@@ -62,6 +62,12 @@ IHost host = Host.CreateDefaultBuilder(args)
             throw new ArgumentNullException(nameof(youtubeApi), "Environment variable TFYAPI is not set.");
         }
 
+        string? geminiApi = Environment.GetEnvironmentVariable("GEMINIAPI");
+        if (String.IsNullOrEmpty(geminiApi))
+        {
+            throw new ArgumentException(nameof(geminiApi), "Environment variable GEMINIAPI is not set.");
+        }
+
         string? vectorStoreApi = Environment.GetEnvironmentVariable("VECTORSTOREAPI");
         if (String.IsNullOrWhiteSpace(vectorStoreApi))
         {
@@ -115,6 +121,17 @@ IHost host = Host.CreateDefaultBuilder(args)
             HttpClient httpClient = new(httpClientHandler);
             httpClient.Timeout = TimeSpan.FromMinutes(5);
             return new YoutubeTextProcessorMiddleware(httpClient, youtubeApi);
+        });
+
+        services.AddSingleton<IGeminiProvider>(_ =>
+        {
+            HttpClientHandler httpClientHandler = new()
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+            HttpClient httpClient = new(httpClientHandler);
+            httpClient.Timeout = TimeSpan.FromMinutes(2);
+            return new GeminiProvider(httpClient, geminiApi);
         });
         
         services.AddSingleton<IRedisCacheService>(_ => new RedisCacheService(redisServer));
