@@ -180,6 +180,8 @@ public class UpdateHandler : IUpdateHandler
             "/reset_key_claude"      => ResetKeyClaudeCommand(_botClient, message, cancellationToken),
             "/key_gigachat"          => SetKeyGigaChatCommand(_botClient, message, cancellationToken),
             "/reset_key_gigachat"    => ResetKeyGigaChatCommand(_botClient, message, cancellationToken),
+            "/key_gemini"            => SetKeyGeminiCommand(_botClient, message, cancellationToken),
+            "/reset_key_gemini"      => ResetKeyGeminiCommand(_botClient, message, cancellationToken),
             "/reset"                 => ResetConversationCommand(_botClient, message, cancellationToken),
             "/info"                  => InfoCommand(message, cancellationToken),
             "/model"                 => ModelCommand(_botClient, message, cancellationToken),
@@ -207,6 +209,54 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ResetKeyGeminiCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.GeminiApiKey = "";
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Gemini API key was reset.",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> SetKeyGeminiCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_gemini' command you must input your Gemini API key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string apiKey = strings[1];
+        if (String.IsNullOrWhiteSpace(apiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_gemini' command you must input your Gemini API key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.GeminiApiKey = apiKey;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Gemini API key was set.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ResetKeyGigaChatCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -1025,6 +1075,10 @@ public class UpdateHandler : IUpdateHandler
             case Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro when String.IsNullOrWhiteSpace(user.GigaChatApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your GigaChat Auth key is not set. Use '/key_gigachat' command and set key.");
+                return false;
+            case Model.Gemini15Pro when String.IsNullOrWhiteSpace(user.GeminiApiKey):
+                await client.SendTextMessageAsync(chatId,
+                    "Your Gemini API key is not set. Use '/key_gemini' command and set key.");
                 return false;
         }
 
@@ -2041,7 +2095,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton gigaChatLiteButton = new("Sber GigaChat Lite") { CallbackData = "/model gigachatlite"};
         InlineKeyboardButton gigaChatLitePlusButton = new("Sber GigaChat Lite+") { CallbackData = "/model gigachatliteplus"};
         InlineKeyboardButton gigaChatProButton = new("Sber GigaChat Pro") { CallbackData = "/model gigachatpro"};
-        
+        InlineKeyboardButton gemini15ProButton = new("Google Gemini 1.5 Pro") { CallbackData = "/model gemini15Pro" };
+
         InlineKeyboardButton[] row1 = [gpt3Button];
         InlineKeyboardButton[] row2 = [gpt4Button];
         InlineKeyboardButton[] row3 = [claudeButton];
@@ -2051,9 +2106,10 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton[] row8 = [gigaChatLiteButton];
         InlineKeyboardButton[] row9 = [gigaChatLitePlusButton];
         InlineKeyboardButton[] row10 = [gigaChatProButton];
-            
+        InlineKeyboardButton[] row11 = [gemini15ProButton];
+
         // Buttons by rows
-        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7, row8, row9, row10];
+        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7, row8, row9, row10, row11];
     
         // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
@@ -2079,6 +2135,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             8) *Sber GigaChat Lite+* model is suitable for tasks that require processing large amounts of data. For example: summarization of articles or call transcriptions, extraction of information from documents.
             
             9) *Sber GigaChat Pro* model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues.
+            
+            7) *Google Gemini 1.5 Pro* a mid-size multimodal model, optimized for scaling across a wide-range of tasks.
             """,
             replyMarkup: inlineKeyboard,
             parseMode: ParseMode.Markdown,
@@ -2122,6 +2180,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             "gigachatlite" => Model.GigaChatLite,
             "gigachatliteplus" => Model.GigaChatLitePlus,
             "gigachatpro" => Model.GigaChatPro,
+            "gemini15Pro" => Model.Gemini15Pro,
             _ => Model.Gpt3
         };
 
@@ -2149,6 +2208,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.GigaChatLite => "GigaChat Lite",
             Model.GigaChatLitePlus => "GigaChat Lite+",
             Model.GigaChatPro => "GigaChat Pro",
+            Model.Gemini15Pro => "Gemini 1.5 Pro",
             _ => throw new ArgumentOutOfRangeException()
         };
     }
@@ -2279,6 +2339,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken),
             Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
                 botClient, storeUser, message, messageText, cancellationToken),
+            Model.Gemini15Pro => await GetResponseFromGeminiModel(botClient, storeUser, message, messageText, cancellationToken),
             _ => await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken),
         };
         
@@ -2333,6 +2394,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 replyToMessageId: message.MessageId,
                 cancellationToken: cancellationToken);
         }
+    }
+
+    private async Task<string?> GetResponseFromGeminiModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, 
+        CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
     }
 
     private async Task<string?> GetResponseFromGigaChatModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, CancellationToken cancellationToken)
@@ -2780,6 +2847,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/reset_key_claude - reset an Anthropic Claude API key\n" +
                        "/key_gigachat - set a Sber Auth key\n" +
                        "/reset_key_gigachat - reset a Sber Auth key\n" +
+                       "/key_gemini - set a Gemini API key\n" +
+                       "/reset_key_gemini - reset an Google Gemini API key\n" +
                        "/model - choose the GPT model to work with\n" +
                        "/context - set the context message\n" +
                        "/contact - contact the bot admin\n" +
