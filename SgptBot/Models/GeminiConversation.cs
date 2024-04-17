@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-internal class GeminiConversation
+public class GeminiConversation
 {
     [JsonPropertyName("contents")]
     public GeminiContent[] Contents { get; set; }

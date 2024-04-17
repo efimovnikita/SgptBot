@@ -81,7 +81,7 @@ app.MapPost("/api/GetAnswerFromGemini", async ([FromBody] RequestPayload request
             }
 
             logger.LogInformation("Successfully retrieved answer from Gemini");
-            return Results.Ok(geminiResponse.Candidates[0].Content.Parts[0].Text);
+            return Results.Text(geminiResponse.Candidates[0].Content.Parts[0].Text);
         }
         else
         {

@@ -349,7 +349,7 @@ public class UpdateHandler : IUpdateHandler
                        Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
                        ✨ *New Features*:
-                       - Added Sber GigaChat models: Now the bot can work with the Sber GigaChat model. Three versions of this model are available.
+                       - Added new Google Gemini 1.5 Pro model: Now the bot can work with the Google Gemini 1.5 Pro model. Try it out!.
                        
                        💬 *Feedback*:
                        We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use /contact command).
@@ -2095,7 +2095,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         InlineKeyboardButton gigaChatLiteButton = new("Sber GigaChat Lite") { CallbackData = "/model gigachatlite"};
         InlineKeyboardButton gigaChatLitePlusButton = new("Sber GigaChat Lite+") { CallbackData = "/model gigachatliteplus"};
         InlineKeyboardButton gigaChatProButton = new("Sber GigaChat Pro") { CallbackData = "/model gigachatpro"};
-        InlineKeyboardButton gemini15ProButton = new("Google Gemini 1.5 Pro") { CallbackData = "/model gemini15Pro" };
+        InlineKeyboardButton gemini15ProButton = new("Google Gemini 1.5 Pro") { CallbackData = "/model gemini15pro" };
 
         InlineKeyboardButton[] row1 = [gpt3Button];
         InlineKeyboardButton[] row2 = [gpt4Button];
@@ -2162,10 +2162,11 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             modelName.ToLower().Equals("claude3haiku") == false &&
             modelName.ToLower().Equals("gigachatlite") == false &&
             modelName.ToLower().Equals("gigachatliteplus") == false &&
-            modelName.ToLower().Equals("gigachatpro") == false)
+            modelName.ToLower().Equals("gigachatpro") == false &&
+            modelName.ToLower().Equals("gemini15pro") == false)
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet', 'claude3haiku', 'gigachatlite', 'gigachatliteplus' or 'gigachatpro'.\nTry again.",
+                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet', 'claude3haiku', 'gigachatlite', 'gigachatliteplus', 'gigachatpro' or 'gemini15pro'.\nTry again.",
                 cancellationToken: cancellationToken);
         }
 
@@ -2180,7 +2181,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             "gigachatlite" => Model.GigaChatLite,
             "gigachatliteplus" => Model.GigaChatLitePlus,
             "gigachatpro" => Model.GigaChatPro,
-            "gemini15Pro" => Model.Gemini15Pro,
+            "gemini15pro" => Model.Gemini15Pro,
             _ => Model.Gpt3
         };
 
@@ -2239,6 +2240,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"OpenAI API key: `{storeUser.ApiKey}`\n" +
             $"Claude API key: `{storeUser.ClaudeApiKey}`\n" +
             $"GigaChat API key: `{storeUser.GigaChatApiKey}`\n" +
+            $"Gemini API key: `{storeUser.GeminiApiKey}`\n" +
             $"Model: `{mName}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
             $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
@@ -2339,7 +2341,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken),
             Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
                 botClient, storeUser, message, messageText, cancellationToken),
-            Model.Gemini15Pro => await GetResponseFromGeminiModel(botClient, storeUser, message, messageText, cancellationToken),
+            Model.Gemini15Pro => await GetResponseFromGeminiModel(storeUser, messageText),
             _ => await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken),
         };
         
@@ -2396,10 +2398,21 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
     }
 
-    private async Task<string?> GetResponseFromGeminiModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, 
-        CancellationToken cancellationToken)
+    private async Task<string?> GetResponseFromGeminiModel(StoreUser storeUser, string messageText)
     {
-        throw new NotImplementedException();
+        List<GeminiContent> geminiContents = [];
+        foreach (Models.Message msg in storeUser.Conversation.Where(m => m.Role != Role.System))
+        {
+            var item = new GeminiContent() { Role = msg.Role == Role.Ai ? "model" : "user", Parts = [new GeminiPart() { Text = msg.Msg }] };
+            geminiContents.Add(item);
+        }
+
+        geminiContents.Add(new GeminiContent() { Role = "user", Parts = [new GeminiPart() { Text = messageText }] });
+
+        GeminiConversation geminiConversation = new() { Contents = [.. geminiContents] };
+
+        string response = await _geminiProvider.GetAnswerFroGemini(storeUser.GeminiApiKey, geminiConversation);
+        return response;
     }
 
     private async Task<string?> GetResponseFromGigaChatModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, CancellationToken cancellationToken)
