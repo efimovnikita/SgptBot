@@ -35,7 +35,7 @@ app.MapPost("/api/GetAnswerFromGemini", async ([FromBody] RequestPayload request
 
     try
     {
-        string url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + request.Key;
+        string url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=" + request.Key;
 
         Conversation? conversation = null;
         try
