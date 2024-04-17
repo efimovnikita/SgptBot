@@ -11,5 +11,6 @@ public enum Model
     Claude3Haiku,
     GigaChatLite,
     GigaChatLitePlus,
-    GigaChatPro
+    GigaChatPro,
+    Gemini15Pro
 }
