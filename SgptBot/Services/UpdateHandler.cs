@@ -230,16 +230,26 @@ public class UpdateHandler : IUpdateHandler
 
         StoreUser[] users = GetActiveUsers();
 
+        List<StoreUser> successfullyDelivered = [];
         foreach (var user in users)
         {
-            await botClient.SendTextMessageAsync(user.Id,
+            try
+            {
+                await botClient.SendTextMessageAsync(user.Id,
                         GetVersionMsg(),
                         parseMode: ParseMode.Markdown,
                         cancellationToken: cancellationToken);
+
+                successfullyDelivered.Add(user);
+            }
+            catch (Exception)
+            {
+                // ignore
+            }
         }
 
         return await botClient.SendTextMessageAsync(admin.Id,
-                $"The new version message was successfully broadcasted ({"user".ToQuantity(users.Length)}).",
+                $"The new version message was successfully broadcasted ({"user".ToQuantity(successfullyDelivered.Count)} from {"user".ToQuantity(users.Length)}).",
                 cancellationToken: cancellationToken);
     }
 
