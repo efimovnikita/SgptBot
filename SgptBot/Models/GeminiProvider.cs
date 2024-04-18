@@ -3,7 +3,7 @@ using System.Text;
 
 internal class GeminiProvider(HttpClient httpClient, string remoteApiUri) : IGeminiProvider
 {
-    public async Task<string> GetAnswerFroGemini(string token, GeminiConversation conversation)
+    public async Task<(string answer, GeminiResponseStatus status)> GetAnswerFroGemini(string token, GeminiConversation conversation)
     {
         try
         {
@@ -21,15 +21,22 @@ internal class GeminiProvider(HttpClient httpClient, string remoteApiUri) : IGem
 
             if (!response.IsSuccessStatusCode)
             {
-                return string.Empty;
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                return (errorMessage, GeminiResponseStatus.Failure);
             }
 
             var text = await response.Content.ReadAsStringAsync();
-            return text;
+            return (text, GeminiResponseStatus.Success);
         }
         catch (Exception)
         {
-            return string.Empty;
+            return (string.Empty, GeminiResponseStatus.Failure);
         }
     }
+}
+
+public enum GeminiResponseStatus
+{
+    Success,
+    Failure
 }

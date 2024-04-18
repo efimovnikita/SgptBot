@@ -1,4 +1,4 @@
 ﻿public interface IGeminiProvider
 {
-    Task<string> GetAnswerFroGemini(string token, GeminiConversation conversation);
+    Task<(string answer, GeminiResponseStatus status)> GetAnswerFroGemini(string token, GeminiConversation conversation);
 }

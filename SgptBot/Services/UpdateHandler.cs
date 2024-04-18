@@ -2341,7 +2341,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken),
             Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
                 botClient, storeUser, message, messageText, cancellationToken),
-            Model.Gemini15Pro => await GetResponseFromGeminiModel(storeUser, messageText),
+            Model.Gemini15Pro => await GetResponseFromGeminiModel(botClient, storeUser, message, messageText, cancellationToken),
             _ => await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken),
         };
         
@@ -2398,7 +2398,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
     }
 
-    private async Task<string?> GetResponseFromGeminiModel(StoreUser storeUser, string messageText)
+    private async Task<string?> GetResponseFromGeminiModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, CancellationToken cancellationToken)
     {
         List<GeminiContent> geminiContents = [];
         foreach (Models.Message msg in storeUser.Conversation.Where(m => m.Role != Role.System))
@@ -2411,8 +2411,22 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         GeminiConversation geminiConversation = new() { Contents = [.. geminiContents] };
 
-        string response = await _geminiProvider.GetAnswerFroGemini(storeUser.GeminiApiKey, geminiConversation);
-        return response;
+        var (answer, status) = await _geminiProvider.GetAnswerFroGemini(storeUser.GeminiApiKey, geminiConversation);
+
+        if (status == GeminiResponseStatus.Failure)
+        {
+            await SendBotResponseDependingOnMsgLength(msg: $"The model returns an error:\n{answer}",
+                client: botClient,
+                chatId: message.Chat.Id,
+                userId: storeUser.Id,
+                cancellationToken: cancellationToken,
+                replyMsgId: message.MessageId,
+                disableWebPagePreview: true);
+
+            return "";
+        }
+
+        return answer;
     }
 
     private async Task<string?> GetResponseFromGigaChatModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, CancellationToken cancellationToken)
@@ -2711,7 +2725,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private static Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
         long chatId,
-        long userId, CancellationToken cancellationToken, int? replyMsgId = null, ParseMode? parseMode = null)
+        long userId, CancellationToken cancellationToken, int? replyMsgId = null, ParseMode? parseMode = null,
+        bool disableWebPagePreview = false)
     {
         if (msg.Length >= MaxMsgLength)
         {
@@ -2726,6 +2741,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             text: msg,
             parseMode: parseMode,
             replyToMessageId: replyMsgId,
+            disableWebPagePreview: disableWebPagePreview,
             cancellationToken: cancellationToken);
     }
 
