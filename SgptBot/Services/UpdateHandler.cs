@@ -1819,7 +1819,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<Message> UsersCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        StoreUser? storeUser = GetStoreUser(message.From);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -1833,7 +1833,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 cancellationToken: cancellationToken);
         }
 
-        StoreUser[] activeUsers = GetActiveUsers();
+        var activeUsers = GetActiveUsers();
 
         if (activeUsers.Length == 0)
         {
@@ -1843,12 +1843,12 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         StringBuilder builder = new();
-        for (int i = 0; i < activeUsers.Take(15).ToArray().Length; i++)
+        for (var i = 0; i < activeUsers.Take(15).ToArray().Length; i++)
         {
-            StoreUser user = activeUsers[i];
-            string lastActivityMessage = GetLastActivityMessage(user.ActivityTime);
+            var user = activeUsers[i];
+            var lastActivityMessage = GetLastActivityMessage(user.ActivityTime);
             builder.AppendLine(
-                $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago; Model: {user.Model};");
+                $"{i + 1}) Id: {user.Id}; First name: {GetUserField(user.FirstName)}; Last name: {GetUserField(user.LastName)}; Username: {GetUserField(user.UserName)}; Last activity: {lastActivityMessage} ago; Model: {ModelInfos.FirstOrDefault(info => info.ModelEnum.Equals(storeUser.Model))?.PrettyName};");
             builder.AppendLine();
         }
 
@@ -1858,6 +1858,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             builder.ToString(),
             cancellationToken: cancellationToken);
     }
+
+    private static string GetUserField(string field) => string.IsNullOrWhiteSpace(field) == false ? field : "<EMPTY>";
 
     private StoreUser[] GetActiveUsers()
     {
