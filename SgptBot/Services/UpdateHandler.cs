@@ -1848,7 +1848,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             var user = activeUsers[i];
             var lastActivityMessage = GetLastActivityMessage(user.ActivityTime);
             builder.AppendLine(
-                $"{i + 1}) Id: {user.Id}; First name: {GetUserField(user.FirstName)}; Last name: {GetUserField(user.LastName)}; Username: {GetUserField(user.UserName)}; Last activity: {lastActivityMessage} ago; Model: {ModelInfos.FirstOrDefault(info => info.ModelEnum.Equals(storeUser.Model))?.PrettyName};");
+                $"{i + 1}) Id: {user.Id}; First name: {GetUserField(user.FirstName)}; Last name: {GetUserField(user.LastName)}; Username: {GetUserField(user.UserName)}; Last activity: {lastActivityMessage} ago; Model: {ModelInfos.FirstOrDefault(info => info.ModelEnum.Equals(user.Model))?.PrettyName};");
             builder.AppendLine();
         }
 
