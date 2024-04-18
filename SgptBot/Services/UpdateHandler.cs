@@ -2457,18 +2457,19 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
     private async Task<string?> GetResponseFromGeminiModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, CancellationToken cancellationToken)
     {
-        List<GeminiContent> geminiContents = [];
-        foreach (Models.Message msg in storeUser.Conversation.Where(m => m.Role != Role.System))
+        List<GeminiContent> contents = [];
+        foreach (var msg in storeUser.Conversation.Where(m => m.Role != Role.System))
         {
-            var item = new GeminiContent() { Role = msg.Role == Role.Ai ? "model" : "user", Parts = [new GeminiPart() { Text = msg.Msg }] };
-            geminiContents.Add(item);
+            var content = new GeminiContent
+                { Role = msg.Role == Role.Ai ? "model" : "user", Parts = [new GeminiPart { Text = msg.Msg }] };
+            contents.Add(content);
         }
 
-        geminiContents.Add(new GeminiContent() { Role = "user", Parts = [new GeminiPart() { Text = messageText }] });
+        contents.Add(new GeminiContent { Role = "user", Parts = [new GeminiPart { Text = messageText }] });
 
-        GeminiConversation geminiConversation = new() { Contents = [.. geminiContents] };
+        GeminiConversation conversation = new() { Contents = [.. contents] };
 
-        var (answer, status) = await _geminiProvider.GetAnswerFroGemini(storeUser.GeminiApiKey, geminiConversation);
+        var (answer, status) = await _geminiProvider.GetAnswerFroGemini(storeUser.GeminiApiKey, conversation);
 
         if (status == GeminiResponseStatus.Failure)
         {
@@ -2480,7 +2481,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 replyMsgId: message.MessageId,
                 disableWebPagePreview: true);
 
-            return "";
+            return string.Empty;
         }
 
         return answer;

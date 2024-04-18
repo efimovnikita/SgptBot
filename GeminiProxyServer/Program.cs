@@ -5,6 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHttpClient();
 builder.Services.AddCors();
 
 builder.WebHost.UseUrls("http://*:5000");
@@ -17,7 +18,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.MapPost("/api/GetAnswerFromGemini", async ([FromBody] RequestPayload request, ILogger<Program> logger) =>
+app.MapPost("/api/GetAnswerFromGemini", async ([FromBody] RequestPayload request, ILogger<Program> logger,
+    IHttpClientFactory httpClientFactory) =>
 {
     logger.LogInformation("Received request for /api/GetAnswerFromGemini");
 
@@ -35,9 +37,9 @@ app.MapPost("/api/GetAnswerFromGemini", async ([FromBody] RequestPayload request
 
     try
     {
-        string url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=" + request.Key;
+        var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=" + request.Key;
 
-        Conversation? conversation = null;
+        Conversation? conversation;
         try
         {
             conversation = JsonSerializer.Deserialize<Conversation>(request.Payload);
@@ -57,13 +59,13 @@ app.MapPost("/api/GetAnswerFromGemini", async ([FromBody] RequestPayload request
         var conversationString = JsonSerializer.Serialize(conversation);
         var content = new StringContent(conversationString, System.Text.Encoding.UTF8, "application/json");
 
-        using var client = new HttpClient();
+        var client = httpClientFactory.CreateClient();
         var response = await client.PostAsync(url, content);
 
         if (response.IsSuccessStatusCode)
         {
             var responseContent = await response.Content.ReadAsStringAsync();
-            GeminiResponse? geminiResponse = null;
+            GeminiResponse? geminiResponse;
             try
             {
                 geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseContent);
@@ -86,7 +88,7 @@ app.MapPost("/api/GetAnswerFromGemini", async ([FromBody] RequestPayload request
         else
         {
             var responseContent = await response.Content.ReadAsStringAsync();
-            GeminiErrorResponse? geminiErrorResponse = null;
+            GeminiErrorResponse? geminiErrorResponse;
             try
             {
                 geminiErrorResponse = JsonSerializer.Deserialize<GeminiErrorResponse>(responseContent);
@@ -97,7 +99,7 @@ app.MapPost("/api/GetAnswerFromGemini", async ([FromBody] RequestPayload request
                 return Results.Problem($"Failed to deserialize Gemini error response. Error: {ex.Message}");
             }
 
-            if (geminiErrorResponse == null || geminiErrorResponse.Error == null)
+            if (geminiErrorResponse == null)
             {
                 logger.LogError("Unknown error occurred");
                 return Results.Problem("Unknown error occurred.");

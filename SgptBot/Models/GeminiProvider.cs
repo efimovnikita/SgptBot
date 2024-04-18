@@ -1,5 +1,7 @@
-﻿using System.Text.Json;
-using System.Text;
+﻿using System.Text;
+using System.Text.Json;
+
+namespace SgptBot.Models;
 
 internal class GeminiProvider(HttpClient httpClient, string remoteApiUri) : IGeminiProvider
 {
@@ -7,36 +9,27 @@ internal class GeminiProvider(HttpClient httpClient, string remoteApiUri) : IGem
     {
         try
         {
-            var requestPayload = new GeminiApiRequestPayload
+            var payload = new GeminiApiRequestPayload
             {
                 Key = token,
                 Payload = JsonSerializer.Serialize(conversation)
             };
 
-            var jsonPayload = JsonSerializer.Serialize(requestPayload);
+            var jsonPayload = JsonSerializer.Serialize(payload);
 
-            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+            var stringContent = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
-            var response = await httpClient.PostAsync(remoteApiUri + "/api/GetAnswerFromGemini", content);
+            var response = await httpClient.PostAsync($"{remoteApiUri}/api/GetAnswerFromGemini", stringContent);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorMessage = await response.Content.ReadAsStringAsync();
-                return (errorMessage, GeminiResponseStatus.Failure);
-            }
+            var answer = await response.Content.ReadAsStringAsync();
 
-            var text = await response.Content.ReadAsStringAsync();
-            return (text, GeminiResponseStatus.Success);
+            return response.IsSuccessStatusCode
+                ? (answer, GeminiResponseStatus.Success)
+                : (answer, GeminiResponseStatus.Failure);
         }
         catch (Exception)
         {
             return (string.Empty, GeminiResponseStatus.Failure);
         }
     }
-}
-
-public enum GeminiResponseStatus
-{
-    Success,
-    Failure
 }
