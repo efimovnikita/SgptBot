@@ -191,6 +191,7 @@ public class UpdateHandler : IUpdateHandler
             "/history"               => HistoryCommand(_botClient, message, cancellationToken),
             "/about"                 => AboutCommand(_botClient, message, cancellationToken),
             "/version"               => VersionCommand(_botClient, message, cancellationToken),
+            "/broadcast"             => BroadcastCommand(_botClient, message, cancellationToken),
             "/users"                 => UsersCommand(_botClient, message, cancellationToken),
             "/all_users"             => AllUsersCommand(_botClient, message, cancellationToken),
             "/allow"                 => AllowCommand(_botClient, message, cancellationToken),
@@ -209,6 +210,37 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> BroadcastCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? admin = GetStoreUser(message.From);
+        if (admin == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        if (admin.IsAdministrator == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "This command might be executed only by the administrator.",
+                cancellationToken: cancellationToken);
+        }
+
+        StoreUser[] users = GetActiveUsers();
+
+        foreach (var user in users)
+        {
+            await botClient.SendTextMessageAsync(user.Id,
+                        GetVersionMsg(),
+                        parseMode: ParseMode.Markdown,
+                        cancellationToken: cancellationToken);
+        }
+
+        return await botClient.SendTextMessageAsync(admin.Id,
+                $"The new version message was successfully broadcasted ({"user".ToQuantity(users.Length)}).",
+                cancellationToken: cancellationToken);
     }
 
     private async Task<Message> ResetKeyGeminiCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -341,6 +373,17 @@ public class UpdateHandler : IUpdateHandler
 
     private static async Task<Message> VersionCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
+        string msg = GetVersionMsg();
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            msg,
+            parseMode: ParseMode.Markdown,
+            disableNotification: true,
+            cancellationToken: cancellationToken);
+    }
+
+    private static string GetVersionMsg()
+    {
         const string name = "LLM Bot";
         string version = GetVersionWithDateTime();
         string msg = $"""
@@ -349,19 +392,14 @@ public class UpdateHandler : IUpdateHandler
                        Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
                        ✨ *New Features*:
-                       - Added new Google Gemini 1.5 Pro model: Now the bot can work with the Google Gemini 1.5 Pro model. Try it out!
+                       - Added new Google Gemini 1.5 Pro model - now the bot can work with the Google Gemini 1.5 Pro model. Try it out!
                        
                        💬 *Feedback*:
                        We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use /contact command).
 
                        Stay tuned for more updates, and thank you for using *{name}*!
                        """;
-        
-        return await botClient.SendTextMessageAsync(message.Chat.Id,
-            msg,
-            parseMode: ParseMode.Markdown,
-            disableNotification: true,
-            cancellationToken: cancellationToken);
+        return msg;
     }
 
     private static string GetVersionWithDateTime()
@@ -1753,31 +1791,25 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
-        
+
         if (storeUser.IsAdministrator == false)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
                 "This command might be executed only by the administrator.",
                 cancellationToken: cancellationToken);
         }
 
-        StoreUser[] users = _userRepository.GetAllUsers();
-        StoreUser[] activeUsers = users
-            .Where(user => user.History.Any(msg => msg.Role == Role.Ai) ||
-                           user.Conversation.Any(msg => msg.Role == Role.Ai))
-            .OrderByDescending(user => user.ActivityTime)
-            .Take(15)
-            .ToArray();
-        
+        StoreUser[] activeUsers = GetActiveUsers();
+
         if (activeUsers.Length == 0)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
                 "Active users not found.",
                 cancellationToken: cancellationToken);
         }
 
         StringBuilder builder = new();
-        for (int i = 0; i < activeUsers.Length; i++)
+        for (int i = 0; i < activeUsers.Take(15).ToArray().Length; i++)
         {
             StoreUser user = activeUsers[i];
             string lastActivityMessage = GetLastActivityMessage(user.ActivityTime);
@@ -1785,12 +1817,25 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 $"{i + 1}) Id: {user.Id}; First name: {user.FirstName}; Last name: {user.LastName}; Username: {user.UserName}; Is blocked: {user.IsBlocked}; Last activity: {lastActivityMessage} ago; Model: {user.Model};");
             builder.AppendLine();
         }
-        
-        return await botClient.SendTextMessageAsync(message.Chat.Id, 
+
+        builder.AppendLine($"The total number: {"user".ToQuantity(activeUsers.Length)}");
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
             builder.ToString(),
             cancellationToken: cancellationToken);
     }
-    
+
+    private StoreUser[] GetActiveUsers()
+    {
+        StoreUser[] users = _userRepository.GetAllUsers();
+        StoreUser[] activeUsers = users
+            .Where(user => user.History.Any(msg => msg.Role == Role.Ai) ||
+                           user.Conversation.Any(msg => msg.Role == Role.Ai))
+            .OrderByDescending(user => user.ActivityTime)
+            .ToArray();
+        return activeUsers;
+    }
+
     private static string GetLastActivityMessage(DateTime lastActivity)
     {
         DateTime current = DateTime.Now;
@@ -2905,7 +2950,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                     "/allow - allow user\n" +
                     "/deny - deny user\n" +
                     "/users - show active users\n" +
-                    "/all_users - show all users";
+                    "/all_users - show all users\n" +
+                    "/broadcast - broadcast the version message";
         }
 
         return await botClient.SendTextMessageAsync(
