@@ -392,7 +392,7 @@ public class UpdateHandler : IUpdateHandler
                        Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
                        ✨ *New Features*:
-                       - Added new Google Gemini 1.5 Pro model - now the bot can work with the Google Gemini 1.5 Pro model. Try it out!
+                       - The bot can now work with the newly added Google Gemini 1.5 Pro model. Remember, to use this model you need a Gemini API key. To add this key just use the `/key_gemini <API_KEY>` command. After adding the key, you must use the `/model` (or just `/model gemini15pro`) command to select a new model. Try it out!
                        
                        💬 *Feedback*:
                        We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use /contact command).
