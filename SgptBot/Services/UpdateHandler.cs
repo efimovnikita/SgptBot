@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Compression;
 using System.Net.Http.Headers;
@@ -51,6 +50,29 @@ public class UpdateHandler : IUpdateHandler
     private readonly IGeminiProvider _geminiProvider;
     private readonly ITokenizer _tokenizer;
     private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf", ".mp3"];
+    private static readonly ModelInfo[] ModelInfos =
+    [
+        new ModelInfo("gpt3.5", "OpenAI GPT-3.5 Turbo", Model.Gpt3,
+            "The model can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family"),
+        new ModelInfo("gpt4", "OpenAI GPT-4 Turbo", Model.Gpt4,
+            "The large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities."),
+        new ModelInfo("claude21", "Anthropic Claude 2.1", Model.Claude21,
+            "The language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages."),
+        new ModelInfo("claude3opus", "Anthropic Claude 3 Opus", Model.Claude3Opus,
+            "The powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding."),
+        new ModelInfo("claude3sonnet", "Anthropic Claude 3 Sonnet", Model.Claude3Sonnet,
+            "The model strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers."),
+        new ModelInfo("claude3haiku", "Anthropic Claude 3 Haiku", Model.Claude3Haiku,
+            "The fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications."),
+        new ModelInfo("gigachatlite", "Sber GigaChat Lite", Model.GigaChatLite,
+            "The model is suitable for solving simpler tasks that require maximum operating speed."),
+        new ModelInfo("gigachatliteplus", "Sber GigaChat Lite+", Model.GigaChatLitePlus,
+            "The model is suitable for tasks that require processing large amounts of data. For example: summarization of articles or call transcriptions, extraction of information from documents."),
+        new ModelInfo("gigachatpro", "Sber GigaChat Pro", Model.GigaChatPro,
+            "The model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues."),
+        new ModelInfo("gemini15pro", "Google Gemini 1.5 Pro", Model.Gemini15Pro,
+            "The mid-size multimodal model, optimized for scaling across a wide-range of tasks.")
+    ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
         IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware, 
@@ -2126,154 +2148,83 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
     }
 
-    [SuppressMessage("ReSharper", "StringLiteralTypo")]
     private async Task<Message> ModelCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        StoreUser? storeUser = GetStoreUser(message.From);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
         
-        string[] strings = message.Text!.Split(' ');
+        var strings = message.Text!.Split(' ');
         if (strings.Length >= 2)
         {
             return await SetSelectedModel(botClient, message.Chat.Id, strings, storeUser, cancellationToken);
         }
 
-        // Defining buttons
-        InlineKeyboardButton gpt3Button = new("OpenAI GPT-3.5 Turbo") { CallbackData = "/model gpt3.5"};
-        InlineKeyboardButton gpt4Button = new("OpenAI GPT-4 Turbo") { CallbackData = "/model gpt4"};
-        InlineKeyboardButton claudeButton = new("Anthropic Claude 2.1") { CallbackData = "/model claude21"};
-        InlineKeyboardButton claude3OpusButton = new("Anthropic Claude 3 Opus") { CallbackData = "/model claude3opus"};
-        InlineKeyboardButton claude3SonnetButton = new("Anthropic Claude 3 Sonnet") { CallbackData = "/model claude3sonnet"};
-        InlineKeyboardButton claude3HaikuButton = new("Anthropic Claude 3 Haiku") { CallbackData = "/model claude3haiku"};
-        InlineKeyboardButton gigaChatLiteButton = new("Sber GigaChat Lite") { CallbackData = "/model gigachatlite"};
-        InlineKeyboardButton gigaChatLitePlusButton = new("Sber GigaChat Lite+") { CallbackData = "/model gigachatliteplus"};
-        InlineKeyboardButton gigaChatProButton = new("Sber GigaChat Pro") { CallbackData = "/model gigachatpro"};
-        InlineKeyboardButton gemini15ProButton = new("Google Gemini 1.5 Pro") { CallbackData = "/model gemini15pro" };
+        var inlineKeyboardButtons = ModelInfos.Select(info => new InlineKeyboardButton(info.PrettyName)
+            { CallbackData = $"/model {info.InternalName}" }).ToList();
+        var buttons = inlineKeyboardButtons.Select(button => (InlineKeyboardButton[]) [button]).ToArray();
 
-        InlineKeyboardButton[] row1 = [gpt3Button];
-        InlineKeyboardButton[] row2 = [gpt4Button];
-        InlineKeyboardButton[] row3 = [claudeButton];
-        InlineKeyboardButton[] row5 = [claude3OpusButton];
-        InlineKeyboardButton[] row6 = [claude3SonnetButton];
-        InlineKeyboardButton[] row7 = [claude3HaikuButton];
-        InlineKeyboardButton[] row8 = [gigaChatLiteButton];
-        InlineKeyboardButton[] row9 = [gigaChatLitePlusButton];
-        InlineKeyboardButton[] row10 = [gigaChatProButton];
-        InlineKeyboardButton[] row11 = [gemini15ProButton];
-
-        // Buttons by rows
-        InlineKeyboardButton[][] buttons = [row1, row2, row3, row5, row6, row7, row8, row9, row10, row11];
-    
-        // Keyboard
         InlineKeyboardMarkup inlineKeyboard = new(buttons);
-            
-        return await botClient.SendTextMessageAsync(message.Chat.Id,
-            """
-            Select the model that you want to use.
 
-            1) *GPT-3.5* models can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family.
-            
-            2) *GPT-4 Turbo* is a large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities.
-            
-            3) *Claude 2.1* is a language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages.
-            
-            4) *Claude 3 Opus* is a powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding.
-            
-            5) *Claude 3 Sonnet* strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers.
-            
-            6) *Claude 3 Haiku*, the fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications.
-            
-            7) *Sber GigaChat Lite* model is suitable for solving simpler tasks that require maximum operating speed.
-            
-            8) *Sber GigaChat Lite+* model is suitable for tasks that require processing large amounts of data. For example: summarization of articles or call transcriptions, extraction of information from documents.
-            
-            9) *Sber GigaChat Pro* model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues.
-            
-            7) *Google Gemini 1.5 Pro* a mid-size multimodal model, optimized for scaling across a wide-range of tasks.
-            """,
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            GetModelDescriptions(),
             replyMarkup: inlineKeyboard,
             parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
     }
 
+    private static string GetModelDescriptions()
+    {
+        var builder = new StringBuilder();
+        for (var i = 0; i < ModelInfos.Length; i++)
+        {
+            var info = ModelInfos[i];
+            builder.AppendLine($"{i + 1}) *{info.PrettyName}*. {info.Description}");
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
     private async Task<Message> SetSelectedModel(ITelegramBotClient botClient, long chatId,
         string[] strings, StoreUser storeUser, CancellationToken cancellationToken)
     {
-        string modelName = strings[1];
-        if (String.IsNullOrWhiteSpace(modelName))
+        var modelName = strings[1];
+        var modelsNames = ModelInfos.Select(info => info.InternalName).ToArray();
+        var errorMsg = $"After the `/model` command you must input the model name.\nModel name must be one of: {modelsNames.Humanize(s => $"`{s}`", "or")}.\nTry again.";
+        if (string.IsNullOrWhiteSpace(modelName))
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus' or 'custom'.\nTry again.",
+                errorMsg,
                 cancellationToken: cancellationToken);
         }
 
-        if (modelName.ToLower().Equals("gpt3.5") == false &&
-            modelName.ToLower().Equals("gpt4") == false &&
-            modelName.ToLower().Equals("claude21") == false &&
-            modelName.ToLower().Equals("claude3opus") == false &&
-            modelName.ToLower().Equals("claude3sonnet") == false &&
-            modelName.ToLower().Equals("claude3haiku") == false &&
-            modelName.ToLower().Equals("gigachatlite") == false &&
-            modelName.ToLower().Equals("gigachatliteplus") == false &&
-            modelName.ToLower().Equals("gigachatpro") == false &&
-            modelName.ToLower().Equals("gemini15pro") == false)
+        var lowerInvariantOfName = modelName.ToLowerInvariant();
+
+        if (!modelsNames.Contains(lowerInvariantOfName))
         {
             return await botClient.SendTextMessageAsync(chatId,
-                "After '/model' command you must input the model name.\nModel name must be either: 'gpt3.5', 'gpt4', 'claude21', 'claude3opus', 'claude3sonnet', 'claude3haiku', 'gigachatlite', 'gigachatliteplus', 'gigachatpro' or 'gemini15pro'.\nTry again.",
+                errorMsg,
+                parseMode: ParseMode.Markdown,
                 cancellationToken: cancellationToken);
         }
 
-        Model selectedModel = modelName.ToLower() switch
-        {
-            "gpt3.5" => Model.Gpt3,
-            "gpt4" => Model.Gpt4,
-            "claude21" => Model.Claude21,
-            "claude3opus" => Model.Claude3Opus,
-            "claude3sonnet" => Model.Claude3Sonnet,
-            "claude3haiku" => Model.Claude3Haiku,
-            "gigachatlite" => Model.GigaChatLite,
-            "gigachatliteplus" => Model.GigaChatLitePlus,
-            "gigachatpro" => Model.GigaChatPro,
-            "gemini15pro" => Model.Gemini15Pro,
-            _ => Model.Gpt3
-        };
-
-        storeUser.Model = selectedModel;
+        storeUser.Model = ModelInfos.FirstOrDefault(info => info.InternalName.Equals(lowerInvariantOfName))?.ModelEnum ?? Model.Gpt3;
         _userRepository.UpdateUser(storeUser);
 
-        string mName = GetModelName(selectedModel);
-        
         return await botClient.SendTextMessageAsync(
             chatId, 
-            $"Model '{mName}' was set.",
+            $"Model `{ModelInfos.FirstOrDefault(info => info.ModelEnum.Equals(storeUser.Model))?.PrettyName}` was set.",
+            parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
-    }
-
-    private static string GetModelName(Model selectedModel)
-    {
-        return selectedModel switch
-        {
-            Model.Gpt3 => "GPT-3.5 Turbo",
-            Model.Gpt4 => "GPT-4 Turbo",
-            Model.Claude21 => "Claude 2.1",
-            Model.Claude3Sonnet => "Claude 3 Sonnet",
-            Model.Claude3Opus => "Claude 3 Opus",
-            Model.Claude3Haiku => "Claude 3 Haiku",
-            Model.GigaChatLite => "GigaChat Lite",
-            Model.GigaChatLitePlus => "GigaChat Lite+",
-            Model.GigaChatPro => "GigaChat Pro",
-            Model.Gemini15Pro => "Gemini 1.5 Pro",
-            _ => throw new ArgumentOutOfRangeException()
-        };
     }
 
     private async Task<Message> InfoCommand(Message message, CancellationToken cancellationToken)
     {
-        StoreUser? storeUser = GetStoreUser(message.From);
+        var storeUser = GetStoreUser(message.From);
         if (storeUser == null)
         {
             return await _botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
@@ -2281,15 +2232,13 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         StringBuilder builder = new();
-        foreach (Models.Message msg in storeUser.Conversation)
+        foreach (var msg in storeUser.Conversation)
         {
             builder.Append(msg.Msg);
         }
 
-        int tokenCount = GetTokenCount(builder.ToString());
+        var tokenCount = GetTokenCount(builder.ToString());
         
-        string mName = GetModelName(storeUser.Model);
-
         return await _botClient.SendTextMessageAsync(message.Chat.Id,
             $"First name: `{storeUser.FirstName}`\n" +
             $"Last name: `{storeUser.LastName}`\n" +
@@ -2298,7 +2247,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Claude API key: `{storeUser.ClaudeApiKey}`\n" +
             $"GigaChat API key: `{storeUser.GigaChatApiKey}`\n" +
             $"Gemini API key: `{storeUser.GeminiApiKey}`\n" +
-            $"Model: `{mName}`\n" +
+            $"Model: `{ModelInfos.FirstOrDefault(info => info.ModelEnum.Equals(storeUser.Model))?.PrettyName}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
             $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
             $"Voice mode: `{(storeUser.VoiceMode ? "on" : "off")}`\n" +
