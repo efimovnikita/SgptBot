@@ -75,7 +75,7 @@ public class UpdateHandler : IUpdateHandler
         new ModelInfo("gemini15pro", "Google Gemini 1.5 Pro", Model.Gemini15Pro,
             "The mid-size multimodal model, optimized for scaling across a wide-range of tasks."),
         new ModelInfo("elmultilingualv2", "ElevenLabs Multilingual v2", Model.ElMultilingualV2,
-            "This model has good stability, great language diversity, and fantastic accuracy in cloning voices and accents. Its speed is rather remarkable considering its size as it supports 28 languages. The model provides only the audio output!")
+            "This model has good stability, great language diversity, and fantastic accuracy in cloning voices and accents. Its speed is rather remarkable considering its size as it supports 28 languages. *This model provides audio output only and is intended for text-to-speech purposes!*")
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
@@ -2490,9 +2490,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         }
 
         var voiceSettings = await api.VoicesEndpoint.GetDefaultVoiceSettingsAsync(cancellationToken);
-        voiceSettings.Stability = 0.4f;
-        voiceSettings.SimilarityBoost = 0.9f;
-        voiceSettings.Style = 0.9f;
+        voiceSettings.Stability = 0.5f;
+        voiceSettings.SimilarityBoost = 0.95f;
+        voiceSettings.Style = 0.7f;
         voiceSettings.SpeakerBoost = true;
 
         VoiceClip voiceClip;
