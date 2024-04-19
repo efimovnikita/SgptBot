@@ -39,6 +39,7 @@ public class StoreUser
     public string ClaudeApiKey { get; set; }
     public string GigaChatApiKey { get; set; }
     public string GeminiApiKey { get; set; }
+    public string ElevenLabsApiKey { get; set; }
     public List<Message> History { get; set; } = [];
     public bool ContextFilterMode { get; set; }
     public List<VectorMemoryItem> MemoryStorage { get; set; } = [];

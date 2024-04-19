@@ -6,6 +6,8 @@ using System.Text;
 using Anthropic.SDK;
 using Anthropic.SDK.Constants;
 using Anthropic.SDK.Messaging;
+using ElevenLabs;
+using ElevenLabs.User;
 using HtmlAgilityPack;
 using Humanizer;
 using iText.Kernel.Pdf;
@@ -71,7 +73,9 @@ public class UpdateHandler : IUpdateHandler
         new ModelInfo("gigachatpro", "Sber GigaChat Pro", Model.GigaChatPro,
             "The model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues."),
         new ModelInfo("gemini15pro", "Google Gemini 1.5 Pro", Model.Gemini15Pro,
-            "The mid-size multimodal model, optimized for scaling across a wide-range of tasks.")
+            "The mid-size multimodal model, optimized for scaling across a wide-range of tasks."),
+        new ModelInfo("elmultilingualv2", "ElevenLabs Multilingual v2", Model.ElMultilingualV2,
+            "This model has good stability, great language diversity, and fantastic accuracy in cloning voices and accents. Its speed is rather remarkable considering its size as it supports 28 languages. The model provides only the audio output!")
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
@@ -204,6 +208,8 @@ public class UpdateHandler : IUpdateHandler
             "/reset_key_gigachat"    => ResetKeyGigaChatCommand(_botClient, message, cancellationToken),
             "/key_gemini"            => SetKeyGeminiCommand(_botClient, message, cancellationToken),
             "/reset_key_gemini"      => ResetKeyGeminiCommand(_botClient, message, cancellationToken),
+            "/key_elevenlabs"        => SetKeyElevenlabsCommand(_botClient, message, cancellationToken),
+            "/reset_key_elevenlabs"  => ResetKeyElevenlabsCommand(_botClient, message, cancellationToken),
             "/reset"                 => ResetConversationCommand(_botClient, message, cancellationToken),
             "/info"                  => InfoCommand(message, cancellationToken),
             "/model"                 => ModelCommand(_botClient, message, cancellationToken),
@@ -232,6 +238,54 @@ public class UpdateHandler : IUpdateHandler
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> ResetKeyElevenlabsCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        var storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.ElevenLabsApiKey = "";
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "ElevenLabs API key was reset.",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> SetKeyElevenlabsCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        var storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        var strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_elevenlabs' command you must input your ElevenLabs API key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        var apiKey = strings[1];
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_elevenlabs' command you must input your ElevenLabs API key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.ElevenLabsApiKey = apiKey;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "ElevenLabs API key was set.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> BroadcastCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -1151,6 +1205,10 @@ public class UpdateHandler : IUpdateHandler
             case Model.Gemini15Pro when String.IsNullOrWhiteSpace(user.GeminiApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your Gemini API key is not set. Use '/key_gemini' command and set key.");
+                return false;
+            case Model.ElMultilingualV2 when String.IsNullOrWhiteSpace(user.ElevenLabsApiKey):
+                await client.SendTextMessageAsync(chatId,
+                    "Your ElevenLabs API key is not set. Use '/key_elevenlabs' command and set key.");
                 return false;
         }
 
@@ -2249,6 +2307,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Claude API key: `{storeUser.ClaudeApiKey}`\n" +
             $"GigaChat API key: `{storeUser.GigaChatApiKey}`\n" +
             $"Gemini API key: `{storeUser.GeminiApiKey}`\n" +
+            $"ElevenLabs API key: `{storeUser.ElevenLabsApiKey}`\n" +
             $"Model: `{ModelInfos.FirstOrDefault(info => info.ModelEnum.Equals(storeUser.Model))?.PrettyName}`\n" +
             $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
             $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
@@ -2350,6 +2409,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
                 botClient, storeUser, message, messageText, cancellationToken),
             Model.Gemini15Pro => await GetResponseFromGeminiModel(botClient, storeUser, message, messageText, cancellationToken),
+            Model.ElMultilingualV2 => await GetAudioResponseFromElevenLabsModel(botClient, storeUser, message, messageText, cancellationToken),
             _ => await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken),
         };
         
@@ -2404,6 +2464,82 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 replyToMessageId: message.MessageId,
                 cancellationToken: cancellationToken);
         }
+    }
+
+    private async Task<string?> GetAudioResponseFromElevenLabsModel(ITelegramBotClient botClient, StoreUser storeUser,
+        Message message, string messageText, CancellationToken cancellationToken)
+    {
+        var api = new ElevenLabsClient(storeUser.ElevenLabsApiKey);
+
+        ElevenLabs.Voices.Voice voice;
+        try
+        {
+            voice = await api.VoicesEndpoint.GetVoiceAsync("U0vl0SaA53U8WUtEDr6s",
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception e)
+        {
+            await SendBotResponseDependingOnMsgLength(msg: e.Message,
+                client: botClient,
+                chatId: message.Chat.Id,
+                userId: storeUser.Id,
+                cancellationToken: cancellationToken,
+                replyMsgId: message.MessageId);
+
+            return "";
+        }
+
+        var voiceSettings = await api.VoicesEndpoint.GetDefaultVoiceSettingsAsync(cancellationToken);
+        voiceSettings.Stability = 0.4f;
+        voiceSettings.SimilarityBoost = 0.9f;
+        voiceSettings.Style = 0.9f;
+        voiceSettings.SpeakerBoost = true;
+
+        VoiceClip voiceClip;
+        SubscriptionInfo subscriptionInfo;
+        try
+        {
+            voiceClip = await api.TextToSpeechEndpoint.TextToSpeechAsync(messageText, voice, voiceSettings: voiceSettings,
+                cancellationToken: cancellationToken);
+            subscriptionInfo = await api.UserEndpoint.GetSubscriptionInfoAsync();
+        }
+        catch (Exception e)
+        {
+            await SendBotResponseDependingOnMsgLength(msg: e.Message,
+                client: botClient,
+                chatId: message.Chat.Id,
+                userId: storeUser.Id,
+                cancellationToken: cancellationToken,
+                replyMsgId: message.MessageId);
+
+            return "";
+        }
+
+        var tempPath = Path.GetTempPath();
+        var tempFileName = Path.Combine(tempPath, $"{voiceClip.Id}.mp3");
+        await System.IO.File.WriteAllBytesAsync(tempFileName, voiceClip.ClipData.ToArray(), cancellationToken);
+
+        if (System.IO.File.Exists(tempFileName))
+        {
+            try
+            {
+                await botClient.SendVoiceAsync(message.Chat.Id,
+                    InputFile.FromStream(System.IO.File.OpenRead(tempFileName)),
+                    replyToMessageId: message.MessageId,
+                    cancellationToken: cancellationToken);
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+
+        return $"""
+               The model provided a response in a form of the audio message 👆
+               
+               Your status: `{subscriptionInfo.Status}`
+               Your limit: `{subscriptionInfo.CharacterCount}/{subscriptionInfo.CharacterLimit}`
+               """;
     }
 
     private async Task<string?> GetResponseFromGeminiModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, CancellationToken cancellationToken)
