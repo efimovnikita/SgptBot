@@ -65,7 +65,7 @@ IHost host = Host.CreateDefaultBuilder(args)
         string? geminiApi = Environment.GetEnvironmentVariable("GEMINIAPI");
         if (String.IsNullOrEmpty(geminiApi))
         {
-            throw new ArgumentException(nameof(geminiApi), "Environment variable GEMINIAPI is not set.");
+            throw new ArgumentNullException(nameof(geminiApi), "Environment variable GEMINIAPI is not set.");
         }
 
         string? vectorStoreApi = Environment.GetEnvironmentVariable("VECTORSTOREAPI");

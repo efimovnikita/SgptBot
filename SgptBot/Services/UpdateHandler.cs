@@ -58,6 +58,8 @@ public class UpdateHandler : IUpdateHandler
             "The model can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family"),
         new ModelInfo("gpt4", "OpenAI GPT-4 Turbo", Model.Gpt4,
             "The large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities."),
+        new ModelInfo("gpt4o", "OpenAI GPT-4 Omni", Model.Gpt4O,
+            "The latest GPT-4 Omni model with multimodal (accepting text or image inputs and outputting text), and same high intelligence as GPT-4 Turbo but more efficient—generates text 2x faster and is 50% cheaper. Additionally, GPT-4o has the best vision and performance across non-English languages of any of our models."),
         new ModelInfo("claude21", "Anthropic Claude 2.1", Model.Claude21,
             "The language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages."),
         new ModelInfo("claude3opus", "Anthropic Claude 3 Opus", Model.Claude3Opus,
@@ -472,21 +474,20 @@ public class UpdateHandler : IUpdateHandler
     private static string GetVersionMsg()
     {
         const string name = "LLM Bot";
-        string version = GetVersionWithDateTime();
-        string msg = $"""
-                       🤖 *{name} v.{version} Update* 🚀
+        var version = GetVersionWithDateTime();
+        var msg = $"""
+                   🤖 *{name} v.{version} Update* 🚀
 
-                       Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
+                   Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
-                       ✨ *New Features*:
-                       - The bot now has the ability to broadcast important messages about its new features!
-                       - The bot can now work with the newly added Google Gemini 1.5 Pro model. Remember, to use this model you need a Gemini API key. To add this key just use the `/key_gemini <API_KEY>` command. After adding the key, you must use the `/model` (or just `/model gemini15pro`) command to select a new model. Try it out!
+                   ✨ *New Features*:
+                   - The bot can now work with the latest GPT-4 Omni model. Remember, to use this model you need a OpenAI API key. To add this key just use the `/key <API_KEY>` command. After adding the key, you must use the `/model` (or just `/model gpt4o`) command to select a new model. Try it out!
 
-                       💬 *Feedback*:
-                       We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use `/contact <MESSAGE>` command).
+                   💬 *Feedback*:
+                   We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use `/contact <MESSAGE>` command).
 
-                       Stay tuned for more updates, and thank you for using *{name}*!
-                       """;
+                   Stay tuned for more updates, and thank you for using *{name}*!
+                   """;
         return msg;
     }
 
@@ -1190,7 +1191,7 @@ public class UpdateHandler : IUpdateHandler
 
         switch (user.Model)
         {
-            case Model.Gpt3 or Model.Gpt4 when String.IsNullOrWhiteSpace(user.ApiKey):
+            case Model.Gpt3 or Model.Gpt4 or Model.Gpt4O when String.IsNullOrWhiteSpace(user.ApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your OpenAI API key is not set. Use '/key' command and set key.");
                 return false;
@@ -2402,7 +2403,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         string? response = storeUser!.Model switch
         {
-            Model.Gpt3 or Model.Gpt4 => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
+            Model.Gpt3 or Model.Gpt4 or Model.Gpt4O => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
                 message, messageText, cancellationToken),
             Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
                 cancellationToken),
@@ -2805,6 +2806,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model = storeUser.Model switch
             {
                 Model.Gpt3 => OpenAiNg.Models.Model.ChatGPTTurbo1106,
+                Model.Gpt4O => "gpt-4o-2024-05-13",
                 _ => OpenAiNg.Models.Model.GPT4_1106_Preview
             },
             Messages = chatMessages.ToArray()

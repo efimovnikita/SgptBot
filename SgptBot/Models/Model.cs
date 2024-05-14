@@ -13,5 +13,6 @@ public enum Model
     GigaChatLitePlus,
     GigaChatPro,
     Gemini15Pro,
-    ElMultilingualV2
+    ElMultilingualV2,
+    Gpt4O
 }
