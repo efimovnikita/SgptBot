@@ -42,6 +42,7 @@ namespace SgptBot.Services;
 public class UpdateHandler : IUpdateHandler
 {
     private const int MaxMsgLength = 4000;
+    private const string Gpt4VisionModelName = "gpt-4-vision-preview";
     private readonly ITelegramBotClient _botClient;
     private readonly ILogger<UpdateHandler> _logger;
     private readonly ApplicationSettings _appSettings;
@@ -316,7 +317,6 @@ public class UpdateHandler : IUpdateHandler
                 await botClient.SendTextMessageAsync(user.Id,
                         GetVersionMsg(),
                         parseMode: ParseMode.Markdown,
-                        disableNotification: true,
                         cancellationToken: cancellationToken);
 
                 successfullyDelivered.Add(user);
@@ -481,7 +481,7 @@ public class UpdateHandler : IUpdateHandler
                    Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
                    ✨ *New Features*:
-                   - The bot can now work with the latest GPT-4 Omni model. Remember, to use this model you need a OpenAI API key. To add this key just use the `/key <API_KEY>` command. After adding the key, you must use the `/model` (or just `/model gpt4o`) command to select a new model. Try it out!
+                   - Right now, the bot can use the vision capabilities of the GPT-4 Omni model. Try sending a message with an image, and remember to include a caption. Enjoy!
 
                    💬 *Feedback*:
                    We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use `/contact <MESSAGE>` command).
@@ -1236,6 +1236,7 @@ public class UpdateHandler : IUpdateHandler
         
         if ((storeUser!.Model == Model.Gpt3 ||
              storeUser.Model == Model.Gpt4 ||
+             storeUser.Model == Model.Gpt4O ||
              storeUser.Model == Model.Claude3Opus ||
              storeUser.Model == Model.Claude3Haiku ||
              storeUser.Model == Model.Claude3Sonnet) ==
@@ -1338,6 +1339,7 @@ public class UpdateHandler : IUpdateHandler
         {
             case Model.Gpt4:
             case Model.Gpt3:
+            case Model.Gpt4O:
             {
                 visionModelResponse =
                     await GetVisionResponseFromOpenAiModel(client, message, storeUser, base64Image, cancellationToken);
@@ -1430,7 +1432,7 @@ public class UpdateHandler : IUpdateHandler
         CancellationToken cancellationToken)
     {
         string visionModelResponse = "";
-        object payload = GetPayload(base64Image, message.Caption);
+        object payload = GetPayload(base64Image, message.Caption, storeUser.Model);
 
         string jsonContent = JsonConvert.SerializeObject(payload);
 
@@ -1461,11 +1463,17 @@ public class UpdateHandler : IUpdateHandler
         return visionModelResponse;
     }
 
-    private static object GetPayload(string base64Image, string? caption)
+    private static object GetPayload(string base64Image, string? caption, Model storeUserModel)
     {
         var payload = new
         {
-            model = "gpt-4-vision-preview",
+            model = storeUserModel switch
+            {
+                Model.Gpt3 => Gpt4VisionModelName,
+                Model.Gpt4 => Gpt4VisionModelName,
+                Model.Gpt4O => "gpt-4o-2024-05-13",
+                _ => "gpt-4o-2024-05-13"
+            },
             messages = new[]
             {
                 new
