@@ -78,7 +78,9 @@ public class UpdateHandler : IUpdateHandler
         new ModelInfo("gemini15pro", "Google Gemini 1.5 Pro", Model.Gemini15Pro,
             "The mid-size multimodal model, optimized for scaling across a wide-range of tasks."),
         new ModelInfo("elmultilingualv2", "ElevenLabs Multilingual v2", Model.ElMultilingualV2,
-            "This model has good stability, great language diversity, and fantastic accuracy in cloning voices and accents. Its speed is rather remarkable considering its size as it supports 28 languages. *This model provides audio output only and is intended for text-to-speech purposes!*")
+            "This model has good stability, great language diversity, and fantastic accuracy in cloning voices and accents. Its speed is rather remarkable considering its size as it supports 28 languages. *This model provides audio output only and is intended for text-to-speech purposes!*"),
+        new ModelInfo("claude-3-5-sonnet-20240620", "Anthropic Claude 3.5 Sonnet", Model.Claude35Sonnet,
+            "Claude 3.5 Sonnet raises the industry bar for intelligence, outperforming competitor models and Claude 3 Opus on a wide range of evaluations, with the speed and cost of our mid-tier model, Claude 3 Sonnet.")
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
@@ -481,7 +483,7 @@ public class UpdateHandler : IUpdateHandler
                    Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
 
                    ✨ *New Features*:
-                   - Right now, the bot can use the vision capabilities of the GPT-4 Omni model. Try sending a message with an image, and remember to include a caption. Enjoy!
+                   - Now you can use the new, state of the art, model from Anthropic called `Claude 3.5 Sonnet`! Remember - you need an `Anthropic API key` in order to use this model. Enjoy!
 
                    💬 *Feedback*:
                    We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use `/contact <MESSAGE>` command).
@@ -1195,7 +1197,7 @@ public class UpdateHandler : IUpdateHandler
                 await client.SendTextMessageAsync(chatId,
                     "Your OpenAI API key is not set. Use '/key' command and set key.");
                 return false;
-            case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
+            case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your Claude API key is not set. Use '/key_claude' command and set key.");
                 return false;
@@ -1239,7 +1241,8 @@ public class UpdateHandler : IUpdateHandler
              storeUser.Model == Model.Gpt4O ||
              storeUser.Model == Model.Claude3Opus ||
              storeUser.Model == Model.Claude3Haiku ||
-             storeUser.Model == Model.Claude3Sonnet) ==
+             storeUser.Model == Model.Claude3Sonnet ||
+             storeUser.Model == Model.Claude35Sonnet) ==
             false)
         {
             await client.SendTextMessageAsync(message.Chat.Id,
@@ -1348,6 +1351,7 @@ public class UpdateHandler : IUpdateHandler
             case Model.Claude3Haiku:
             case Model.Claude3Sonnet:
             case Model.Claude3Opus:
+            case Model.Claude35Sonnet:
             {
                 visionModelResponse =
                     await GetVisionResponseFromAnthropicModel(client, message, storeUser, base64Image,
@@ -1402,6 +1406,7 @@ public class UpdateHandler : IUpdateHandler
                 Model.Claude3Sonnet => AnthropicModels.Claude3Sonnet,
                 Model.Claude3Opus => AnthropicModels.Claude3Opus,
                 Model.Claude3Haiku => AnthropicModels.Claude3Haiku,
+                Model.Claude35Sonnet => "claude-3-5-sonnet-20240620",
                 _ => AnthropicModels.Claude3Haiku
             },
             Stream = false,
@@ -2413,7 +2418,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             Model.Gpt3 or Model.Gpt4 or Model.Gpt4O => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
                 message, messageText, cancellationToken),
-            Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
+            Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
                 cancellationToken),
             Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
                 botClient, storeUser, message, messageText, cancellationToken),
@@ -2657,6 +2662,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 Model.Claude3Sonnet => AnthropicModels.Claude3Sonnet,
                 Model.Claude3Opus => AnthropicModels.Claude3Opus,
                 Model.Claude3Haiku => AnthropicModels.Claude3Haiku,
+                Model.Claude35Sonnet => "claude-3-5-sonnet-20240620",
                 _ => AnthropicModels.Claude3Haiku
             },
             Stream = false,

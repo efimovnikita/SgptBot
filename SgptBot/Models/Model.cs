@@ -14,5 +14,6 @@ public enum Model
     GigaChatPro,
     Gemini15Pro,
     ElMultilingualV2,
-    Gpt4O
+    Gpt4O,
+    Claude35Sonnet
 }
