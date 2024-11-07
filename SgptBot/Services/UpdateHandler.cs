@@ -49,7 +49,6 @@ public class UpdateHandler : IUpdateHandler
     private readonly IUserRepository _userRepository;
     private readonly IYoutubeTextProcessor _youtubeTextProcessor;
     private readonly IVectorStoreMiddleware _vectorStoreMiddleware;
-    private readonly ISummarizationProvider _summarizationProvider;
     private readonly IGeminiProvider _geminiProvider;
     private readonly ITokenizer _tokenizer;
     private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf", ".mp3"];
@@ -72,8 +71,8 @@ public class UpdateHandler : IUpdateHandler
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
-        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware, 
-        ISummarizationProvider summarizationProvider, IGeminiProvider geminiProvider)
+        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware,
+        IGeminiProvider geminiProvider)
     {
         _botClient = botClient;
         _logger = logger;
@@ -81,7 +80,6 @@ public class UpdateHandler : IUpdateHandler
         _userRepository = userRepository;
         _youtubeTextProcessor = youtubeTextProcessor;
         _vectorStoreMiddleware = vectorStoreMiddleware;
-        _summarizationProvider = summarizationProvider;
         _geminiProvider = geminiProvider;
         _tokenizer = TokenizerBuilder.CreateByModelNameAsync("gpt-4").Result;
     }
@@ -223,7 +221,6 @@ public class UpdateHandler : IUpdateHandler
             "/toggle_context_filter_mode" => ToggleContextFilterModeCommand(message, cancellationToken),
             "/select_memory"         => SelectMemoryCommand(message, cancellationToken),
             "/clear_working_memory"  => ClearWorkingMemoryCommand(message, cancellationToken),
-            "/summarize"             => SummarizeCommand(message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
             "/force_update_models"    => ForceUpdateModelsCommand(_botClient, message, cancellationToken),
@@ -512,44 +509,6 @@ public class UpdateHandler : IUpdateHandler
             cancellationToken: cancellationToken);
         
         return true;
-    }
-
-    private async Task<Message> SummarizeCommand(Message message, CancellationToken cancellationToken)
-    {
-        StoreUser? storeUser = GetStoreUser(message.From);
-        if (await ValidateUser(storeUser, _botClient, message.Chat.Id) == false)
-        {
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "Error: User validation failed.",
-                cancellationToken: cancellationToken);
-        }
-
-        StringBuilder builder = new();
-        foreach (Models.Message msg in storeUser!.Conversation.Where(m => m.Role != Role.System))
-        {
-            builder.AppendLine($"{(msg.Role == Role.User ? "USER:\n" : "AI:\n")}{msg.Msg}");
-        }
-
-        string context = builder.ToString();
-        
-        if (String.IsNullOrWhiteSpace(context))
-        {
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "Warning: context is empty. Nothing to summarize. Try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        string summary = await _summarizationProvider.GetSummary(storeUser.ApiKey, storeUser.Model, context);
-        
-        if (String.IsNullOrWhiteSpace(summary))
-        {
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "Warning: summary is empty. Try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        return await SendBotResponseDependingOnMsgLength($"Summary:\n\n{summary}", _botClient, message.Chat.Id, storeUser.Id,
-            cancellationToken);
     }
 
     private async Task<Message> ClearWorkingMemoryCommand(Message message, CancellationToken cancellationToken)
@@ -2834,7 +2793,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/append - append text to your last message\n" +
                        "/reset_context - reset the context message\n" +
                        "/reset - reset the current conversation\n" +
-                       "/summarize - get a summary from the current conversation\n" +
                        "/toggle_voice - enable/disable voice mode\n" +
                        "/toggle_img_quality - switch between standard or HD image quality\n" +
                        "/toggle_img_style - switch between vivid or natural image style\n" +
