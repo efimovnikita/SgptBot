@@ -67,6 +67,8 @@ public class UpdateHandler : IUpdateHandler
             "The powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding."),
         new ModelInfo("claude3sonnet", "Anthropic Claude 3 Sonnet", Model.Claude3Sonnet,
             "The model strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers."),
+        new ModelInfo("claude-3-5-sonnet-20240620", "Anthropic Claude 3.5 Sonnet", Model.Claude35Sonnet,
+            "Claude 3.5 Sonnet raises the industry bar for intelligence, outperforming competitor models and Claude 3 Opus on a wide range of evaluations, with the speed and cost of our mid-tier model, Claude 3 Sonnet."),
         new ModelInfo("claude3haiku", "Anthropic Claude 3 Haiku", Model.Claude3Haiku,
             "The fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications."),
         new ModelInfo("gigachatlite", "Sber GigaChat Lite", Model.GigaChatLite,
@@ -79,8 +81,6 @@ public class UpdateHandler : IUpdateHandler
             "The mid-size multimodal model, optimized for scaling across a wide-range of tasks."),
         new ModelInfo("elmultilingualv2", "ElevenLabs Multilingual v2", Model.ElMultilingualV2,
             "This model has good stability, great language diversity, and fantastic accuracy in cloning voices and accents. Its speed is rather remarkable considering its size as it supports 28 languages. *This model provides audio output only and is intended for text-to-speech purposes!*"),
-        new ModelInfo("claude-3-5-sonnet-20240620", "Anthropic Claude 3.5 Sonnet", Model.Claude35Sonnet,
-            "Claude 3.5 Sonnet raises the industry bar for intelligence, outperforming competitor models and Claude 3 Opus on a wide range of evaluations, with the speed and cost of our mid-tier model, Claude 3 Sonnet.")
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
