@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using SgptBot.Models;
 using SgptBot.Services;
 using Telegram.Bot;
@@ -68,40 +67,6 @@ IHost host = Host.CreateDefaultBuilder(args)
             throw new ArgumentNullException(nameof(geminiApi), "Environment variable GEMINIAPI is not set.");
         }
 
-        string? vectorStoreApi = Environment.GetEnvironmentVariable("VECTORSTOREAPI");
-        if (String.IsNullOrWhiteSpace(vectorStoreApi))
-        {
-            throw new ArgumentNullException(nameof(vectorStoreApi), "Environment variable VECTORSTOREAPI is not set.");
-        }
-
-        string? maxTokensPerLineStr = Environment.GetEnvironmentVariable("MAX_TOKENS_PER_LINE");
-        if (String.IsNullOrWhiteSpace(maxTokensPerLineStr))
-        {
-            throw new ArgumentNullException(nameof(maxTokensPerLineStr), "Environment variable MAX_TOKENS_PER_LINE is not set.");
-        }
-
-        string? maxTokensPerParagraphStr = Environment.GetEnvironmentVariable("MAX_TOKENS_PER_PARAGRAPH");
-        if (String.IsNullOrWhiteSpace(maxTokensPerParagraphStr))
-        {
-            throw new ArgumentNullException(nameof(maxTokensPerParagraphStr), "Environment variable MAX_TOKENS_PER_PARAGRAPH is not set.");
-        }
-
-        string? overlapTokensStr = Environment.GetEnvironmentVariable("OVERLAP_TOKENS");
-        if (String.IsNullOrWhiteSpace(overlapTokensStr))
-        {
-            throw new ArgumentNullException(nameof(overlapTokensStr), "Environment variable OVERLAP_TOKENS is not set.");
-        }
-
-        int maxTokensPerLine = Int32.Parse(maxTokensPerLineStr);
-        int maxTokensPerParagraph = Int32.Parse(maxTokensPerParagraphStr);
-        int overlapTokens = Int32.Parse(overlapTokensStr);
-
-        string? redisServer = Environment.GetEnvironmentVariable("REDIS_SERVER");
-        if (String.IsNullOrWhiteSpace(redisServer))
-        {
-            throw new ArgumentNullException(nameof(redisServer), "Environment variable REDIS_SERVER is not set.");
-        }
-
         services.AddHttpClient("telegram_bot_client")
             .AddTypedClient<ITelegramBotClient>((httpClient, _) =>
             {
@@ -134,17 +99,6 @@ IHost host = Host.CreateDefaultBuilder(args)
             return new GeminiProvider(httpClient, geminiApi);
         });
         
-        services.AddSingleton<IRedisCacheService>(_ => new RedisCacheService(redisServer));
-
-        services.AddSingleton<IVectorStoreMiddleware>(serviceProvider =>
-        {
-            HttpClient httpClient = new();
-            httpClient.Timeout = TimeSpan.FromMinutes(5);
-            ILogger<VectorStoreMiddleware> logger = serviceProvider.GetRequiredService<ILogger<VectorStoreMiddleware>>();
-            IRedisCacheService redisCacheService = serviceProvider.GetRequiredService<IRedisCacheService>();
-            return new VectorStoreMiddleware(httpClient, vectorStoreApi, maxTokensPerLine, maxTokensPerParagraph, overlapTokens, logger, redisCacheService);
-        });
-
         services.AddScoped<UpdateHandler>();
         services.AddScoped<ReceiverService>();
         services.AddHostedService<PollingService>();

@@ -22,10 +22,8 @@ using Newtonsoft.Json.Linq;
 using OpenAiNg;
 using OpenAiNg.Audio;
 using OpenAiNg.Chat;
-using OpenAiNg.ChatFunctions;
 using OpenAiNg.Images;
 using SgptBot.Models;
-using SgptBot.Shared.Models;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
@@ -152,31 +150,17 @@ public class UpdateHandler : IUpdateHandler
         {
             string? textFromDocumentMessage = await GetTextFromDocumentMessage(message, client, message.Chat.Id,
                 cancellationToken);
-            if (storeUser is {ContextFilterMode: false})
-            {
-                messageText = textFromDocumentMessage + (String.IsNullOrEmpty(message.Caption) == false
-                    ? $"\n{message.Caption}"
-                    : String.Empty);
-            }
-            
-            if (storeUser is {ContextFilterMode: true})
-            {
-                await StoreNewMemory(storeUser, textFromDocumentMessage, message.Document!.FileName);
-                messageText = message.Caption ?? "";
-            }
+            messageText = textFromDocumentMessage + (String.IsNullOrEmpty(message.Caption) == false
+                ? $"\n{message.Caption}"
+                : String.Empty);
         }
 
-        string processedMsg = await ProcessUrlIfPresent(messageText: messageText,
+        await ProcessUrlIfPresent(messageText: messageText,
             botClient: client,
             chatId: message.Chat.Id,
             storeUser: storeUser!,
             cancellationToken: cancellationToken);
         
-        if (await StoreUrlTranscriptInMemory(message, client, processedMsg, messageText, storeUser,
-                cancellationToken)) return;
-        
-        messageText = processedMsg;
-
         if (String.IsNullOrWhiteSpace(messageText))
         {
             await client.SendTextMessageAsync(message.Chat.Id,
@@ -218,12 +202,10 @@ public class UpdateHandler : IUpdateHandler
             "/toggle_img_quality"    => ToggleImgQualityCommand(_botClient, message, cancellationToken),
             "/toggle_img_style"      => ToggleImgStyleCommand(_botClient, message, cancellationToken),
             "/toggle_anew_mode"      => ToggleAnewMode(_botClient, message, cancellationToken),
-            "/toggle_context_filter_mode" => ToggleContextFilterModeCommand(message, cancellationToken),
-            "/select_memory"         => SelectMemoryCommand(message, cancellationToken),
-            "/clear_working_memory"  => ClearWorkingMemoryCommand(message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
             "/force_update_models"    => ForceUpdateModelsCommand(_botClient, message, cancellationToken),
+            "/force_cleanup_context"   => ForceCleanupContextFilterCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
@@ -497,146 +479,6 @@ public class UpdateHandler : IUpdateHandler
         return versionWithDateTime;
     }
 
-    private async Task<bool> StoreUrlTranscriptInMemory(Message message, ITelegramBotClient client,
-        string processedMsg, string? messageText, StoreUser? storeUser, CancellationToken cancellationToken)
-    {
-        if (processedMsg.Equals(messageText, StringComparison.OrdinalIgnoreCase) ||
-            processedMsg.Length <= messageText!.Length || !storeUser!.ContextFilterMode) return false;
-        
-        await StoreNewMemory(storeUser, processedMsg, $"Url_{Guid.NewGuid()}");
-        await client.SendTextMessageAsync(message.Chat.Id,
-            "The transcript form the url was stored in the memory.",
-            cancellationToken: cancellationToken);
-        
-        return true;
-    }
-
-    private async Task<Message> ClearWorkingMemoryCommand(Message message, CancellationToken cancellationToken)
-    {
-        StoreUser? storeUser = GetStoreUser(message.From);
-        if (await ValidateUser(storeUser, _botClient, message.Chat.Id) == false)
-        {
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "Error: User validation failed.",
-                cancellationToken: cancellationToken);
-        }
-        
-        if (storeUser!.ContextFilterMode == false)
-        {
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "In order to clear the working memory, please active the context filter mode (use '/toggle_context_filter_mode' command)",
-                cancellationToken: cancellationToken);
-        }
-        
-        storeUser.WorkingMemory.Clear();
-        _userRepository.UpdateUser(storeUser);
-        
-        await SendInfoAboutAvailableMemories(message, storeUser, cancellationToken);
-        
-        return await _botClient.SendTextMessageAsync(message.Chat.Id,
-            "Working memory was cleared.",
-            cancellationToken: cancellationToken);
-    }
-
-    private async Task<Message> SelectMemoryCommand(Message message, CancellationToken cancellationToken)
-    {
-        StoreUser? storeUser = GetStoreUser(message.From);
-        if (await ValidateUser(storeUser, _botClient, message.Chat.Id) == false)
-        {
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "Error: User validation failed.",
-                cancellationToken: cancellationToken);
-        }
-        
-        if (storeUser!.ContextFilterMode == false)
-        {
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "In order to select the memory, please active the context filter mode (use '/toggle_context_filter_mode' command)",
-                cancellationToken: cancellationToken);
-        }
-        
-        string[] strings = message.Text!.Split(' ');
-        if (strings.Length < 2)
-        {
-            await SendInfoAboutAvailableMemories(message, storeUser, cancellationToken);
-
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "After the '/select_memory' command you must input the memory name (or multiple names, separated by comma). Try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        string contextNames = String.Join(' ', strings.Skip(1));
-        if (String.IsNullOrWhiteSpace(contextNames))
-        {
-            await SendInfoAboutAvailableMemories(message, storeUser, cancellationToken);
-
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "After the '/select_memory' command you must input the memory name (or multiple names, separated by comma). Try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        string[] individualNames = contextNames
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(name => name.Trim()).ToArray();
-        
-        storeUser.WorkingMemory.Clear();
-        
-        foreach (string name in individualNames)
-        {
-            VectorMemoryItem? memoryItem = storeUser.MemoryStorage.FirstOrDefault(item => item.MemoryId == name);
-            if (memoryItem == null)
-            {
-                continue;
-            }
-
-            if (storeUser.WorkingMemory.FirstOrDefault(item => item.MemoryId == name) != null)
-            {
-                continue;
-            }
-
-            storeUser.WorkingMemory.Add(memoryItem);
-        }
-        
-        _userRepository.UpdateUser(storeUser);
-        
-        return await SendInfoAboutAvailableMemories(message, storeUser, cancellationToken);
-    }
-
-    private async Task<Message> SendInfoAboutAvailableMemories(Message message,
-        StoreUser storeUser, CancellationToken cancellationToken)
-    {
-        string availableMemories = String.Join("\n", storeUser.MemoryStorage.Select(item => $"- `{item.MemoryId}`").ToArray());
-        string currentWorkingMemoryItems =
-            String.Join("\n", storeUser.WorkingMemory.Select(item => $"- `{item.MemoryId}`").ToArray());
-
-        return await SendBotResponseDependingOnMsgLength(msg: $"""
-                                                        You can add a memory by uploading a text file (.txt, .md or .zip archive with text files) to the bot. 
-                                                        Remember — you must use 'Context Filter' mode.
-                                                        
-                                                        *Available memories ({"item".ToQuantity(storeUser.MemoryStorage.Count)}):*
-
-                                                        {(availableMemories.Length > 0 ? availableMemories : "_...empty..._")}
-
-                                                        *Current working memory items ({"item".ToQuantity(storeUser.WorkingMemory.Count)}):*
-
-                                                        {(currentWorkingMemoryItems.Length > 0 ? currentWorkingMemoryItems : "_...empty..._")}
-                                                        """,
-            _botClient, message.Chat.Id, storeUser.Id, cancellationToken, parseMode: ParseMode.Markdown);
-    }
-
-    private async Task StoreNewMemory(StoreUser storeUser, string? text, string? fileName)
-    {
-        VectorMemoryItem? memoryItem = await _vectorStoreMiddleware.Memorize(user: storeUser,
-            memories: text,
-            fileName: fileName);
-        if (memoryItem != null)
-        {
-            storeUser.MemoryStorage.Add(memoryItem);
-            storeUser.WorkingMemory = [memoryItem];
-            _userRepository.UpdateUser(storeUser);
-        }
-    }
-
     private async Task<string> EnrichUserPromptWithRelevantContext(StoreUser? storeUser, string userPrompt)
     {
         if (userPrompt.StartsWith('/')) return userPrompt;
@@ -658,26 +500,6 @@ public class UpdateHandler : IUpdateHandler
                Question: {userPrompt}
                """
             : userPrompt;
-    }
-
-    private async Task<Message> ToggleContextFilterModeCommand(Message message, CancellationToken cancellationToken)
-    {
-        StoreUser? storeUser = GetStoreUser(message.From);
-        if (await ValidateUser(storeUser, _botClient, message.Chat.Id) == false)
-        {
-            return await _botClient.SendTextMessageAsync(message.Chat.Id,
-                "Error: User validation failed.",
-                cancellationToken: cancellationToken);
-        }
-
-        storeUser!.ContextFilterMode = !storeUser.ContextFilterMode;
-        storeUser.AnewMode = storeUser.ContextFilterMode;
-        
-        _userRepository.UpdateUser(storeUser);
-        
-        return await _botClient.SendTextMessageAsync(message.Chat.Id, 
-            $"Context filter mode is: {(storeUser.ContextFilterMode ? "`on`" : "`off`")}\nAnew mode is: {(storeUser.AnewMode ? "`on`" : "`off`")}\n\nTurn on the 'Context Filter' mode, and the bot will keep conversations simple and to the point. This mode makes the bot act like a filter, picking out only the most important parts of what you say. It helps avoid confusion by ignoring the bits that aren't needed for understanding. With this mode, the bot's answers are clear and focused, making sure you get the information you need quickly and easily.",
-            cancellationToken: cancellationToken, parseMode: ParseMode.Markdown);
     }
 
     private async Task<Message> ContactCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -2612,24 +2434,23 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         return builder.ToString();
     }
 
-    private async Task<string> ProcessUrlIfPresent(string messageText,
+    private async Task ProcessUrlIfPresent(string messageText,
         ITelegramBotClient botClient, long chatId, StoreUser storeUser,
         CancellationToken cancellationToken)
     {
         if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
         {
-            return messageText;
+            return;
         }
         
         string transcriptFromLink = await _youtubeTextProcessor.ProcessTextAsync(messageText, storeUser.ApiKey);
         if (messageText == transcriptFromLink)
         {
-            return messageText;
+            return;
         }
 
         await SendDocumentResponseAsync(transcriptFromLink, botClient, chatId, storeUser.Id,
             cancellationToken, "This is your transcript \ud83d\udc46");
-        return $"This is the transcript from my web link:\n\n######\n{transcriptFromLink}\n######\n\nI want to ask you about this transcript... Wait for my question. Just say - 'Ask me about this transcript...'";
     }
 
     private static Task<Message> SendBotResponseDependingOnMsgLength(string msg, ITelegramBotClient client,
@@ -2814,7 +2635,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                     "/users - show active users\n" +
                     "/all_users - show all users\n" +
                     "/broadcast - broadcast the version message\n" +
-                    "/force_update_models - force update deprecated models to GPT-4 Omni";
+                    "/force_update_models - force update deprecated models to GPT-4 Omni\n" +
+                    "/force_cleanup_context - force disable context filter mode and clear memories for all users";  // Add this line
         }
 
         return await botClient.SendTextMessageAsync(
@@ -2887,6 +2709,43 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         return await botClient.SendTextMessageAsync(message.Chat.Id,
             $"Updated {updatedCount} users to use GPT-4 Omni model.",
+            cancellationToken: cancellationToken);
+    }
+
+    // Add this method to the UpdateHandler class
+    private async Task<Message> ForceCleanupContextFilterCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+            
+        if (storeUser.IsAdministrator == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "This command might be executed only by the administrator.",
+                cancellationToken: cancellationToken);
+        }
+
+        var users = _userRepository.GetAllUsers();
+        int updatedCount = 0;
+
+        foreach (var user in users)
+        {
+            if (user.ContextFilterMode)
+            {
+                user.ContextFilterMode = false;
+                user.MemoryStorage.Clear();
+                user.WorkingMemory.Clear();
+                _userRepository.UpdateUser(user);
+                updatedCount++;
+            }
+        }
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            $"Updated {updatedCount} users: context filter mode was disabled, memory storage and working memory were cleared.",
             cancellationToken: cancellationToken);
     }
 }
