@@ -55,14 +55,8 @@ public class UpdateHandler : IUpdateHandler
     private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf", ".mp3"];
     private static readonly ModelInfo[] ModelInfos =
     [
-        new ModelInfo("gpt3.5", "OpenAI GPT-3.5 Turbo", Model.Gpt3,
-            "The model can understand and generate natural language or code. Most capable and cost effective model in the GPT-3.5 family"),
-        new ModelInfo("gpt4", "OpenAI GPT-4 Turbo", Model.Gpt4,
-            "The large multimodal model (accepting text inputs and emitting text outputs today, with image inputs coming in the future) that can solve difficult problems with greater accuracy than any previous models, thanks to its broader general knowledge and advanced reasoning capabilities."),
         new ModelInfo("gpt4o", "OpenAI GPT-4 Omni", Model.Gpt4O,
             "The latest GPT-4 Omni model with multimodal (accepting text or image inputs and outputting text), and same high intelligence as GPT-4 Turbo but more efficient—generates text 2x faster and is 50% cheaper. Additionally, GPT-4o has the best vision and performance across non-English languages of any of our models."),
-        new ModelInfo("claude21", "Anthropic Claude 2.1", Model.Claude21,
-            "The language model that can generate various types of text-based outputs from user's prompts. You can use Claude 2 for e-commerce tasks, creating email templates and generating code in popular programming languages."),
         new ModelInfo("claude3opus", "Anthropic Claude 3 Opus", Model.Claude3Opus,
             "The powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding."),
         new ModelInfo("claude3sonnet", "Anthropic Claude 3 Sonnet", Model.Claude3Sonnet,
@@ -71,16 +65,10 @@ public class UpdateHandler : IUpdateHandler
             "Claude 3.5 Sonnet raises the industry bar for intelligence, outperforming competitor models and Claude 3 Opus on a wide range of evaluations, with the speed and cost of our mid-tier model, Claude 3 Sonnet."),
         new ModelInfo("claude3haiku", "Anthropic Claude 3 Haiku", Model.Claude3Haiku,
             "The fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications."),
-        new ModelInfo("gigachatlite", "Sber GigaChat Lite", Model.GigaChatLite,
-            "The model is suitable for solving simpler tasks that require maximum operating speed."),
-        new ModelInfo("gigachatliteplus", "Sber GigaChat Lite+", Model.GigaChatLitePlus,
-            "The model is suitable for tasks that require processing large amounts of data. For example: summarization of articles or call transcriptions, extraction of information from documents."),
         new ModelInfo("gigachatpro", "Sber GigaChat Pro", Model.GigaChatPro,
             "The model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues."),
         new ModelInfo("gemini15pro", "Google Gemini 1.5 Pro", Model.Gemini15Pro,
             "The mid-size multimodal model, optimized for scaling across a wide-range of tasks."),
-        new ModelInfo("elmultilingualv2", "ElevenLabs Multilingual v2", Model.ElMultilingualV2,
-            "This model has good stability, great language diversity, and fantastic accuracy in cloning voices and accents. Its speed is rather remarkable considering its size as it supports 28 languages. *This model provides audio output only and is intended for text-to-speech purposes!*"),
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
@@ -239,6 +227,7 @@ public class UpdateHandler : IUpdateHandler
             "/summarize"             => SummarizeCommand(message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
+            "/force_update_models"    => ForceUpdateModelsCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
@@ -480,7 +469,7 @@ public class UpdateHandler : IUpdateHandler
         var msg = $"""
                    🤖 *{name} v.{version} Update* 🚀
 
-                   Hello everyone! We've just rolled out an exciting update to *{name}*. Here’s what’s new in version *{version}*:
+                   Hello everyone! We've just rolled out an exciting update to *{name}*. Here's what's new in version *{version}*:
 
                    ✨ *New Features*:
                    - Now you can use the new, state of the art, model from Anthropic called `Claude 3.5 Sonnet`! Remember - you need an `Anthropic API key` in order to use this model. Enjoy!
@@ -3067,7 +3056,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                     "/deny - deny user\n" +
                     "/users - show active users\n" +
                     "/all_users - show all users\n" +
-                    "/broadcast - broadcast the version message";
+                    "/broadcast - broadcast the version message\n" +
+                    "/force_update_models - force update deprecated models to GPT-4 Omni";
         }
 
         return await botClient.SendTextMessageAsync(
@@ -3096,5 +3086,50 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         // Cooldown in case of network connection error
         if (exception is RequestException)
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+    }
+
+    // Add this method to the UpdateHandler class
+    private async Task<Message> ForceUpdateModelsCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+            
+        if (storeUser.IsAdministrator == false)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "This command might be executed only by the administrator.",
+                cancellationToken: cancellationToken);
+        }
+
+        var deprecatedModels = new[] 
+        { 
+            Model.Gpt3, 
+            Model.Gpt4, 
+            Model.Claude21,
+            Model.GigaChatLite,
+            Model.GigaChatLitePlus,
+            Model.ElMultilingualV2
+        };
+
+        var users = _userRepository.GetAllUsers();
+        int updatedCount = 0;
+
+        foreach (var user in users)
+        {
+            if (deprecatedModels.Contains(user.Model))
+            {
+                user.Model = Model.Gpt4O;
+                _userRepository.UpdateUser(user);
+                updatedCount++;
+            }
+        }
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            $"Updated {updatedCount} users to use GPT-4 Omni model.",
+            cancellationToken: cancellationToken);
     }
 }
