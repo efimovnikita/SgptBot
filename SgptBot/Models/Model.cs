@@ -15,5 +15,7 @@ public enum Model
     Gemini15Pro,
     ElMultilingualV2,
     Gpt4O,
-    Claude35Sonnet
+    Claude35Sonnet,
+    Claude35Haiku,
+    Gpt4OMini
 }

@@ -41,6 +41,10 @@ public class UpdateHandler : IUpdateHandler
 {
     private const int MaxMsgLength = 4000;
     private const string Gpt4VisionModelName = "gpt-4-vision-preview";
+    private const string ClaudeSonnet35LatestApiName = "claude-3-5-sonnet-latest";
+    private const string ClaudeHaiku35LatestApiName = "claude-3-5-haiku-latest";
+    private const string GptOMiniApiName = "gpt-4o-mini";
+    private const string Gpt4OApiName = "gpt-4o";
     private readonly ITelegramBotClient _botClient;
     private readonly ILogger<UpdateHandler> _logger;
     private readonly ApplicationSettings _appSettings;
@@ -52,16 +56,20 @@ public class UpdateHandler : IUpdateHandler
     private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf", ".mp3"];
     private static readonly ModelInfo[] ModelInfos =
     [
-        new ModelInfo("gpt4o", "OpenAI GPT-4 Omni", Model.Gpt4O,
+        new ModelInfo(GptOMiniApiName, "OpenAI GPT-4o mini", Model.Gpt4OMini,
+            "GPT-4o mini is the most advanced model in the small models category, and cheapest model yet. It is multimodal (accepting text or image inputs and outputting text), has higher intelligence than gpt-3.5-turbo but is just as fast. It is meant to be used for smaller tasks, including vision tasks."),
+        new ModelInfo(Gpt4OApiName, "OpenAI GPT-4 Omni", Model.Gpt4O,
             "The latest GPT-4 Omni model with multimodal (accepting text or image inputs and outputting text), and same high intelligence as GPT-4 Turbo but more efficient—generates text 2x faster and is 50% cheaper. Additionally, GPT-4o has the best vision and performance across non-English languages of any of our models."),
         new ModelInfo("claude3opus", "Anthropic Claude 3 Opus", Model.Claude3Opus,
             "The powerful model, delivering state-of-the-art performance on highly complex tasks and demonstrating fluency and human-like understanding."),
         new ModelInfo("claude3sonnet", "Anthropic Claude 3 Sonnet", Model.Claude3Sonnet,
             "The model strikes the ideal balance between intelligence and speed—particularly for high-volume tasks. For the vast majority of workloads, Sonnet is 2x faster than Claude 2 and Claude 2.1 with higher levels of intelligence, and delivers strong performance at a lower cost compared to its peers."),
-        new ModelInfo("claude-3-5-sonnet-20240620", "Anthropic Claude 3.5 Sonnet", Model.Claude35Sonnet,
+        new ModelInfo(ClaudeSonnet35LatestApiName, "Anthropic Claude 3.5 Sonnet", Model.Claude35Sonnet,
             "Claude 3.5 Sonnet raises the industry bar for intelligence, outperforming competitor models and Claude 3 Opus on a wide range of evaluations, with the speed and cost of our mid-tier model, Claude 3 Sonnet."),
         new ModelInfo("claude3haiku", "Anthropic Claude 3 Haiku", Model.Claude3Haiku,
             "The fastest and most affordable model in its intelligence class. With state-of-the-art vision capabilities and strong performance on industry benchmarks, Haiku is a versatile solution for a wide range of enterprise applications."),
+        new ModelInfo(ClaudeHaiku35LatestApiName, "Anthropic Claude 3.5 Haiku", Model.Claude35Haiku,
+            "Claude 3.5 Haiku is the next generation of our fastest model. For a similar speed to Claude 3 Haiku, Claude 3.5 Haiku improves across every skill set and surpasses Claude 3 Opus."),
         new ModelInfo("gigachatpro", "Sber GigaChat Pro", Model.GigaChatPro,
             "The model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues."),
         new ModelInfo("gemini15pro", "Google Gemini 1.5 Pro", Model.Gemini15Pro,
@@ -450,7 +458,9 @@ public class UpdateHandler : IUpdateHandler
                    Hello everyone! We've just rolled out an exciting update to *{name}*. Here's what's new in version *{version}*:
 
                    ✨ *New Features*:
-                   - Now you can use the new, state of the art, model from Anthropic called `Claude 3.5 Sonnet`! Remember - you need an `Anthropic API key` in order to use this model. Enjoy!
+                   - Added the new OpenAI GPT-4o mini model - most advanced model in the small models category, and cheapest model yet
+                   - Added the new Anthropic Claude 3.5 Haiku model - the next generation of the fastest model
+                   - Updated Anthropic Claude 3.5 Sonnet to the latest version - raising the industry bar for intelligence!
 
                    💬 *Feedback*:
                    We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use `/contact <MESSAGE>` command).
@@ -962,11 +972,11 @@ public class UpdateHandler : IUpdateHandler
 
         switch (user.Model)
         {
-            case Model.Gpt3 or Model.Gpt4 or Model.Gpt4O when String.IsNullOrWhiteSpace(user.ApiKey):
+            case Model.Gpt3 or Model.Gpt4 or Model.Gpt4O or Model.Gpt4OMini when String.IsNullOrWhiteSpace(user.ApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your OpenAI API key is not set. Use '/key' command and set key.");
                 return false;
-            case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
+            case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet or Model.Claude35Haiku when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your Claude API key is not set. Use '/key_claude' command and set key.");
                 return false;
@@ -1008,6 +1018,7 @@ public class UpdateHandler : IUpdateHandler
         if ((storeUser!.Model == Model.Gpt3 ||
              storeUser.Model == Model.Gpt4 ||
              storeUser.Model == Model.Gpt4O ||
+             storeUser.Model == Model.Gpt4OMini ||
              storeUser.Model == Model.Claude3Opus ||
              storeUser.Model == Model.Claude3Haiku ||
              storeUser.Model == Model.Claude3Sonnet ||
@@ -1111,6 +1122,7 @@ public class UpdateHandler : IUpdateHandler
         {
             case Model.Gpt4:
             case Model.Gpt3:
+            case Model.Gpt4OMini:
             case Model.Gpt4O:
             {
                 visionModelResponse =
@@ -1175,7 +1187,7 @@ public class UpdateHandler : IUpdateHandler
                 Model.Claude3Sonnet => AnthropicModels.Claude3Sonnet,
                 Model.Claude3Opus => AnthropicModels.Claude3Opus,
                 Model.Claude3Haiku => AnthropicModels.Claude3Haiku,
-                Model.Claude35Sonnet => "claude-3-5-sonnet-20240620",
+                Model.Claude35Sonnet => ClaudeSonnet35LatestApiName,
                 _ => AnthropicModels.Claude3Haiku
             },
             Stream = false,
@@ -1245,8 +1257,9 @@ public class UpdateHandler : IUpdateHandler
             {
                 Model.Gpt3 => Gpt4VisionModelName,
                 Model.Gpt4 => Gpt4VisionModelName,
-                Model.Gpt4O => "gpt-4o-2024-05-13",
-                _ => "gpt-4o-2024-05-13"
+                Model.Gpt4OMini => GptOMiniApiName,
+                Model.Gpt4O => Gpt4OApiName,
+                _ => Gpt4OApiName
             },
             messages = new[]
             {
@@ -1986,9 +1999,9 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
 
         string? response = storeUser!.Model switch
         {
-            Model.Gpt3 or Model.Gpt4 or Model.Gpt4O => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
+            Model.Gpt3 or Model.Gpt4 or Model.Gpt4O or Model.Gpt4OMini => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
                 message, messageText, cancellationToken),
-            Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
+            Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet or Model.Claude35Haiku => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
                 cancellationToken),
             Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
                 botClient, storeUser, message, messageText, cancellationToken),
@@ -2232,7 +2245,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 Model.Claude3Sonnet => AnthropicModels.Claude3Sonnet,
                 Model.Claude3Opus => AnthropicModels.Claude3Opus,
                 Model.Claude3Haiku => AnthropicModels.Claude3Haiku,
-                Model.Claude35Sonnet => "claude-3-5-sonnet-20240620",
+                Model.Claude35Sonnet => ClaudeSonnet35LatestApiName,
+                Model.Claude35Haiku => ClaudeHaiku35LatestApiName,
                 _ => AnthropicModels.Claude3Haiku
             },
             Stream = false,
@@ -2390,7 +2404,8 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model = storeUser.Model switch
             {
                 Model.Gpt3 => OpenAiNg.Models.Model.ChatGPTTurbo1106,
-                Model.Gpt4O => "gpt-4o-2024-05-13",
+                Model.Gpt4OMini => GptOMiniApiName,
+                Model.Gpt4O => Gpt4OApiName,
                 _ => OpenAiNg.Models.Model.GPT4_1106_Preview
             },
             Messages = chatMessages.ToArray()
@@ -2701,14 +2716,14 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         {
             if (deprecatedModels.Contains(user.Model))
             {
-                user.Model = Model.Gpt4O;
+                user.Model = Model.Gpt4OMini;
                 _userRepository.UpdateUser(user);
                 updatedCount++;
             }
         }
 
         return await botClient.SendTextMessageAsync(message.Chat.Id,
-            $"Updated {updatedCount} users to use GPT-4 Omni model.",
+            $"Updated {updatedCount} users to use GPT-4 Omni Mini model.",
             cancellationToken: cancellationToken);
     }
 
