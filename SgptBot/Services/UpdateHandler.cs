@@ -2606,9 +2606,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/toggle_img_quality - switch between standard or HD image quality\n" +
                        "/toggle_img_style - switch between vivid or natural image style\n" +
                        "/toggle_anew_mode - switch on or off 'anew' mode. With this mode you can start each conversation from the beginning without relying on previous history\n" +
-                       "/toggle_context_filter_mode - switch on or off 'context filter' mode. This mode simplifies interactions by narrowing down the context to just the essential parts for quick and clear communication\n" +
-                       "/select_memory - add previously uploaded memory into the working memory. Works only with the 'context filter' mode\n" +
-                       "/clear_working_memory - clear current working memory. Works only with the 'context filter' mode\n" +
                        "/image - generate an image with help of DALL·E 3\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
