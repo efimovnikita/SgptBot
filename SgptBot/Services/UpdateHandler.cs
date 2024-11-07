@@ -50,7 +50,6 @@ public class UpdateHandler : IUpdateHandler
     private readonly ApplicationSettings _appSettings;
     private readonly IUserRepository _userRepository;
     private readonly IYoutubeTextProcessor _youtubeTextProcessor;
-    private readonly IVectorStoreMiddleware _vectorStoreMiddleware;
     private readonly IGeminiProvider _geminiProvider;
     private readonly ITokenizer _tokenizer;
     private readonly string[] _allowedExtensions = [".md", ".txt", ".cs", ".zip", ".html", ".htm", ".pdf", ".mp3"];
@@ -77,7 +76,7 @@ public class UpdateHandler : IUpdateHandler
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
-        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor, IVectorStoreMiddleware vectorStoreMiddleware,
+        IUserRepository userRepository, IYoutubeTextProcessor youtubeTextProcessor,
         IGeminiProvider geminiProvider)
     {
         _botClient = botClient;
@@ -85,7 +84,6 @@ public class UpdateHandler : IUpdateHandler
         _appSettings = appSettings;
         _userRepository = userRepository;
         _youtubeTextProcessor = youtubeTextProcessor;
-        _vectorStoreMiddleware = vectorStoreMiddleware;
         _geminiProvider = geminiProvider;
         _tokenizer = TokenizerBuilder.CreateByModelNameAsync("gpt-4").Result;
     }
@@ -177,9 +175,7 @@ public class UpdateHandler : IUpdateHandler
             _logger.LogWarning("[{MethodName}] Message is empty. Return.", nameof(BotOnMessageReceived));
             return;
         }
-
-        messageText = await EnrichUserPromptWithRelevantContext(storeUser, messageText);
-
+        
         Task<Message> action = messageText.Split(' ')[0] switch
         {
             "/usage"                 => UsageCommand(_botClient, message, cancellationToken),
@@ -488,30 +484,7 @@ public class UpdateHandler : IUpdateHandler
 
         return versionWithDateTime;
     }
-
-    private async Task<string> EnrichUserPromptWithRelevantContext(StoreUser? storeUser, string userPrompt)
-    {
-        if (userPrompt.StartsWith('/')) return userPrompt;
-        if (storeUser == null) return userPrompt;
-        if (storeUser.Model is not (Model.Gpt3 or Model.Gpt4)) return userPrompt;
-        if (String.IsNullOrWhiteSpace(storeUser.ApiKey)) return userPrompt;
-        if (storeUser is not {ContextFilterMode: true, WorkingMemory.Count: > 0}) return userPrompt;
-        string[] context =
-            await _vectorStoreMiddleware.RecallMemoryFromVectorContext(storeUser, userPrompt);
-        return context.Length > 0
-            ? $"""
-               This is additional context. Use this to create a high-quality answer.
-               This context may be irrelevant. If the context is irrelevant, simply disregard it.
-
-               ADDITIONAL CONTEXT START
-               {String.Join("\n", context)}
-               ADDITIONAL CONTEXT END
-
-               Question: {userPrompt}
-               """
-            : userPrompt;
-    }
-
+    
     private async Task<Message> ContactCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
