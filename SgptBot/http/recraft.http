@@ -1,0 +1,9 @@
+### Generate image with Recraft AI
+POST https://external.api.recraft.ai/v1/images/generations
+Content-Type: application/json
+Authorization: Bearer {{recraft_api_token}}
+
+{
+    "prompt": "two race cars on a track",
+    "style": "digital_illustration"
+} 

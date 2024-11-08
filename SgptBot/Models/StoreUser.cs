@@ -34,6 +34,10 @@ public class StoreUser
     public bool VoiceMode { get; set; }
     public ImgQuality ImgQuality { get; set; } = ImgQuality.Standard;
     public ImgStyle ImgStyle { get; set; } = ImgStyle.Natural;
+
+    public RecraftImgStyle RecraftImgStyle { get; set; } = RecraftImgStyle.DigitalIllustration;
+
+    public RecraftImgSubStyle RecraftImgSubStyle { get; set; } = RecraftImgSubStyle.None;
     public DateTime ActivityTime { get; set; } = new(2020, 1, 1, 1, 00, 00);
     public bool AnewMode { get; set; }
     public string ClaudeApiKey { get; set; }
@@ -44,6 +48,7 @@ public class StoreUser
     public bool ContextFilterMode { get; set; }
     public List<VectorMemoryItem> MemoryStorage { get; set; } = [];
     public List<VectorMemoryItem> WorkingMemory { get; set; } = [];
+    public string RecraftApiKey { get; set; }
 
     public override string ToString()
     {

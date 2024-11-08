@@ -17,5 +17,6 @@ public enum Model
     Gpt4O,
     Claude35Sonnet,
     Claude35Haiku,
-    Gpt4OMini
+    Gpt4OMini,
+    RecraftAi
 }

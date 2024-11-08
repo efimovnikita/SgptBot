@@ -6,8 +6,6 @@ using System.Text;
 using Anthropic.SDK;
 using Anthropic.SDK.Constants;
 using Anthropic.SDK.Messaging;
-using ElevenLabs;
-using ElevenLabs.User;
 using HtmlAgilityPack;
 using Humanizer;
 using iText.Kernel.Pdf;
@@ -22,15 +20,14 @@ using Newtonsoft.Json.Linq;
 using OpenAiNg;
 using OpenAiNg.Audio;
 using OpenAiNg.Chat;
-using OpenAiNg.Images;
 using SgptBot.Models;
+using SgptBot.Models.Extensions;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
-using Data = OpenAiNg.Images.Data;
 using File = Telegram.Bot.Types.File;
 using Message = Telegram.Bot.Types.Message;
 using Model = SgptBot.Models.Model;
@@ -73,6 +70,8 @@ public class UpdateHandler : IUpdateHandler
             "The model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues."),
         new ModelInfo("gemini15pro", "Google Gemini 1.5 Pro", Model.Gemini15Pro,
             "The mid-size multimodal model, optimized for scaling across a wide-range of tasks."),
+        new ModelInfo("recraftai", "Recraft AI", Model.RecraftAi,
+            "Recraft AI is a powerful image generation model that creates high-quality, customizable images from text descriptions."),
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
@@ -187,8 +186,6 @@ public class UpdateHandler : IUpdateHandler
             "/reset_key_gigachat"    => ResetKeyGigaChatCommand(_botClient, message, cancellationToken),
             "/key_gemini"            => SetKeyGeminiCommand(_botClient, message, cancellationToken),
             "/reset_key_gemini"      => ResetKeyGeminiCommand(_botClient, message, cancellationToken),
-            "/key_elevenlabs"        => SetKeyElevenlabsCommand(_botClient, message, cancellationToken),
-            "/reset_key_elevenlabs"  => ResetKeyElevenlabsCommand(_botClient, message, cancellationToken),
             "/reset"                 => ResetConversationCommand(_botClient, message, cancellationToken),
             "/info"                  => InfoCommand(message, cancellationToken),
             "/model"                 => ModelCommand(_botClient, message, cancellationToken),
@@ -203,65 +200,18 @@ public class UpdateHandler : IUpdateHandler
             "/allow"                 => AllowCommand(_botClient, message, cancellationToken),
             "/deny"                  => DenyCommand(_botClient, message, cancellationToken),
             "/toggle_voice"          => ToggleVoiceCommand(_botClient, message, cancellationToken),
-            "/toggle_img_quality"    => ToggleImgQualityCommand(_botClient, message, cancellationToken),
-            "/toggle_img_style"      => ToggleImgStyleCommand(_botClient, message, cancellationToken),
             "/toggle_anew_mode"      => ToggleAnewMode(_botClient, message, cancellationToken),
             "/image"                 => ImageCommand(_botClient, message, cancellationToken),
             "/append"                => AppendCommand(_botClient, message, cancellationToken),
-            "/force_update_models"    => ForceUpdateModelsCommand(_botClient, message, cancellationToken),
-            "/force_cleanup_context"   => ForceCleanupContextFilterCommand(_botClient, message, cancellationToken),
+            "/key_recraft"          => SetKeyRecraftCommand(_botClient, message, cancellationToken),
+            "/reset_key_recraft"    => ResetKeyRecraftCommand(_botClient, message, cancellationToken),
+            "/toggle_recraft_style" => ToggleRecraftStyleCommand(_botClient, message, cancellationToken),
+            "/toggle_recraft_substyle" => ToggleRecraftSubStyleCommand(_botClient, message, cancellationToken),
+            "/reset_recraft_substyle" => ResetRecraftSubStyleCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
-    }
-
-    private async Task<Message> ResetKeyElevenlabsCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
-    {
-        var storeUser = GetStoreUser(message.From);
-        if (storeUser == null)
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
-                cancellationToken: cancellationToken);
-        }
-
-        storeUser.ElevenLabsApiKey = "";
-        _userRepository.UpdateUser(storeUser);
-
-        return await botClient.SendTextMessageAsync(message.Chat.Id, "ElevenLabs API key was reset.",
-            cancellationToken: cancellationToken);
-    }
-
-    private async Task<Message> SetKeyElevenlabsCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
-    {
-        var storeUser = GetStoreUser(message.From);
-        if (storeUser == null)
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
-                cancellationToken: cancellationToken);
-        }
-
-        var strings = message.Text!.Split(' ');
-        if (strings.Length < 2)
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id,
-                "After '/key_elevenlabs' command you must input your ElevenLabs API key. Try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        var apiKey = strings[1];
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id,
-                "After '/key_elevenlabs' command you must input your ElevenLabs API key. Try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        storeUser.ElevenLabsApiKey = apiKey;
-        _userRepository.UpdateUser(storeUser);
-
-        return await botClient.SendTextMessageAsync(message.Chat.Id, "ElevenLabs API key was set.",
-            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> BroadcastCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -454,9 +404,12 @@ public class UpdateHandler : IUpdateHandler
                    Hello everyone! We've just rolled out an exciting update to *{name}*. Here's what's new in version *{version}*:
 
                    ✨ *New Features*:
-                   - Added the new OpenAI GPT-4o mini model - most advanced model in the small models category, and cheapest model yet
-                   - Added the new Anthropic Claude 3.5 Haiku model - the next generation of the fastest model
-                   - Updated Anthropic Claude 3.5 Sonnet to the latest version - raising the industry bar for intelligence!
+                   - Integrated Recraft AI for high-quality image generation with customizable styles:
+                     • Two main styles: Realistic and Digital Illustration
+                     • Multiple sub-styles for each main style
+                     • Use `/toggle_recraft_style` and `/toggle_recraft_substyle` to customize your images
+                     • Generate images using `/image` command with your prompt
+                     • In order to use this feature you need to set your Recraft API key using `/key_recraft` command
 
                    💬 *Feedback*:
                    We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use `/contact <MESSAGE>` command).
@@ -965,6 +918,10 @@ public class UpdateHandler : IUpdateHandler
                 await client.SendTextMessageAsync(chatId,
                     "Your ElevenLabs API key is not set. Use '/key_elevenlabs' command and set key.");
                 return false;
+            case Model.RecraftAi when String.IsNullOrWhiteSpace(user.RecraftApiKey):
+                await client.SendTextMessageAsync(chatId,
+                    "Your Recraft AI API key is not set. Use '/key_recraft' command and set key.");
+                return false;
         }
 
         if (user is {IsAdministrator: false, IsBlocked: true})
@@ -1314,68 +1271,6 @@ public class UpdateHandler : IUpdateHandler
             cancellationToken: cancellationToken);
     }
 
-    private async Task<Message> ToggleImgStyleCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
-    {
-        StoreUser? storeUser = GetStoreUser(message.From);
-        if (storeUser == null)
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
-                cancellationToken: cancellationToken);
-        }
-        
-        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Your api key is not set. Use '/key' command and set key.",
-                cancellationToken: cancellationToken);
-        }
-
-        if (storeUser is { IsBlocked: true, IsAdministrator: false })
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "You are blocked. Wait for some time and try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        storeUser.ImgStyle = storeUser.ImgStyle == ImgStyle.Natural ? ImgStyle.Vivid : ImgStyle.Natural;
-        _userRepository.UpdateUser(storeUser);
-
-        return await botClient.SendTextMessageAsync(message.Chat.Id, 
-            @$"Vivid causes the model to lean towards generating hyper-real and dramatic images. Natural causes the model to produce more natural, less hyper-real looking images.
-
-Current image style is: {storeUser.ImgStyle.ToString().ToLower()}",
-            cancellationToken: cancellationToken);
-    }
-
-    private async Task<Message> ToggleImgQualityCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
-    {
-        StoreUser? storeUser = GetStoreUser(message.From);
-        if (storeUser == null)
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
-                cancellationToken: cancellationToken);
-        }
-        
-        if (String.IsNullOrWhiteSpace(storeUser.ApiKey))
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "Your api key is not set. Use '/key' command and set key.",
-                cancellationToken: cancellationToken);
-        }
-
-        if (storeUser is { IsBlocked: true, IsAdministrator: false })
-        {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, "You are blocked. Wait for some time and try again.",
-                cancellationToken: cancellationToken);
-        }
-
-        storeUser.ImgQuality = storeUser.ImgQuality == ImgQuality.Standard ? ImgQuality.Hd : ImgQuality.Standard;
-        _userRepository.UpdateUser(storeUser);
-
-        return await botClient.SendTextMessageAsync(message.Chat.Id,
-            @$"HD creates images with finer details and greater consistency across the image.
-
-Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
-            cancellationToken: cancellationToken);
-    }
-
     private async Task<Message> ImageCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
@@ -1400,9 +1295,15 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 "After the '/image' command you must input the prompt. Try again.",
                 cancellationToken: cancellationToken);
         }
+        
+        if (storeUser.Model != Model.RecraftAi)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "You must use a RecraftAi model in order to get an image. Try again.",
+                cancellationToken: cancellationToken);
+        }
 
-        string? url = await GenerateImage(prompt, storeUser.ApiKey,
-            storeUser.ImgStyle, storeUser.ImgQuality);
+        string? url = await GenerateImage(prompt, storeUser.RecraftApiKey, storeUser.RecraftImgStyle, storeUser.RecraftImgSubStyle);
         if (String.IsNullOrEmpty(url))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id,
@@ -1877,15 +1778,14 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             $"Claude API key: `{storeUser.ClaudeApiKey}`\n" +
             $"GigaChat API key: `{storeUser.GigaChatApiKey}`\n" +
             $"Gemini API key: `{storeUser.GeminiApiKey}`\n" +
-            $"ElevenLabs API key: `{storeUser.ElevenLabsApiKey}`\n" +
+            $"Recraft AI API key: `{storeUser.RecraftApiKey}`\n" +
             $"Model: `{ModelInfos.FirstOrDefault(info => info.ModelEnum.Equals(storeUser.Model))?.PrettyName}`\n" +
-            $"Image quality: `{storeUser.ImgQuality.ToString().ToLower()}`\n" +
-            $"Image style: `{storeUser.ImgStyle.ToString().ToLower()}`\n" +
+            $"Image style: `{storeUser.RecraftImgStyle.GetDescription()}`\n" +
+            $"Image sub-style: `{storeUser.RecraftImgSubStyle.GetDescription()}`\n" +
             $"Voice mode: `{(storeUser.VoiceMode ? "on" : "off")}`\n" +
-            $"Context filter mode: `{(storeUser.ContextFilterMode ? "on" : "off" )}`\n" +
             $"Anew mode: `{(storeUser.AnewMode ? "on" : "off")}`\n" +
             $"Current context window size (number of tokens): `{tokenCount}`\n" +
-            $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? "_<empty>_"}",
+            $"Context prompt: {storeUser.Conversation.FirstOrDefault(msg => msg.Role == Role.System)?.Msg ?? "_<empty>_"}\n",
             parseMode: ParseMode.Markdown,
             cancellationToken: cancellationToken);
     }
@@ -1979,7 +1879,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
                 botClient, storeUser, message, messageText, cancellationToken),
             Model.Gemini15Pro => await GetResponseFromGeminiModel(botClient, storeUser, message, messageText, cancellationToken),
-            Model.ElMultilingualV2 => await GetAudioResponseFromElevenLabsModel(botClient, storeUser, message, messageText, cancellationToken),
+            Model.RecraftAi => "The Recraft AI model can only be used with the '/image' command to generate images. Please use '/image' followed by your prompt, or select a different model for text conversations.",
             _ => await GetResponseFromAnthropicModel(botClient, storeUser, message, messageText, cancellationToken),
         };
         
@@ -2034,82 +1934,6 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                 replyToMessageId: message.MessageId,
                 cancellationToken: cancellationToken);
         }
-    }
-
-    private async Task<string?> GetAudioResponseFromElevenLabsModel(ITelegramBotClient botClient, StoreUser storeUser,
-        Message message, string messageText, CancellationToken cancellationToken)
-    {
-        var api = new ElevenLabsClient(storeUser.ElevenLabsApiKey);
-
-        ElevenLabs.Voices.Voice voice;
-        try
-        {
-            voice = await api.VoicesEndpoint.GetVoiceAsync("U0vl0SaA53U8WUtEDr6s",
-                cancellationToken: cancellationToken);
-        }
-        catch (Exception e)
-        {
-            await SendBotResponseDependingOnMsgLength(msg: e.Message,
-                client: botClient,
-                chatId: message.Chat.Id,
-                userId: storeUser.Id,
-                cancellationToken: cancellationToken,
-                replyMsgId: message.MessageId);
-
-            return "";
-        }
-
-        var voiceSettings = await api.VoicesEndpoint.GetDefaultVoiceSettingsAsync(cancellationToken);
-        voiceSettings.Stability = 0.5f;
-        voiceSettings.SimilarityBoost = 0.95f;
-        voiceSettings.Style = 0.7f;
-        voiceSettings.SpeakerBoost = true;
-
-        VoiceClip voiceClip;
-        SubscriptionInfo subscriptionInfo;
-        try
-        {
-            voiceClip = await api.TextToSpeechEndpoint.TextToSpeechAsync(messageText, voice, voiceSettings: voiceSettings,
-                cancellationToken: cancellationToken);
-            subscriptionInfo = await api.UserEndpoint.GetSubscriptionInfoAsync();
-        }
-        catch (Exception e)
-        {
-            await SendBotResponseDependingOnMsgLength(msg: e.Message,
-                client: botClient,
-                chatId: message.Chat.Id,
-                userId: storeUser.Id,
-                cancellationToken: cancellationToken,
-                replyMsgId: message.MessageId);
-
-            return "";
-        }
-
-        var tempPath = Path.GetTempPath();
-        var tempFileName = Path.Combine(tempPath, $"{voiceClip.Id}.mp3");
-        await System.IO.File.WriteAllBytesAsync(tempFileName, voiceClip.ClipData.ToArray(), cancellationToken);
-
-        if (System.IO.File.Exists(tempFileName))
-        {
-            try
-            {
-                await botClient.SendVoiceAsync(message.Chat.Id,
-                    InputFile.FromStream(System.IO.File.OpenRead(tempFileName)),
-                    replyToMessageId: message.MessageId,
-                    cancellationToken: cancellationToken);
-            }
-            catch
-            {
-                // ignored
-            }
-        }
-
-        return $"""
-               The model provided a response in a form of the audio message 👆
-               
-               Your status: `{subscriptionInfo.Status}`
-               Your limit: `{subscriptionInfo.CharacterCount}/{subscriptionInfo.CharacterLimit}`
-               """;
     }
 
     private async Task<string?> GetResponseFromGeminiModel(ITelegramBotClient botClient, StoreUser storeUser, Message message, string messageText, CancellationToken cancellationToken)
@@ -2501,39 +2325,48 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
         // Return the full path of the created file
         return filePath;
     }
-    
-    private async Task<string?> GenerateImage(string prompt, string token, ImgStyle style,
-        ImgQuality quality)
+
+    private async Task<string?> GenerateImage(string prompt, string apiKey, RecraftImgStyle style, RecraftImgSubStyle subStyle)
     {
+        _logger.LogInformation("Starting image generation with Recraft AI for prompt: {Prompt}", prompt);
         try
         {
-            OpenAiApi api = new(token);
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-            ImageGenerationRequest request = new(prompt)
+            _logger.LogInformation("Using style: {Style}", style.GetDescription());
+            _logger.LogInformation("Using sub-style: {SubStyle}", subStyle.GetDescription());
+
+            var payload = new
             {
-                Model = OpenAiNg.Models.Model.Dalle3,
-                Quality = quality == ImgQuality.Standard ? ImageQuality.Standard : ImageQuality.Hd,
-                Style = style == ImgStyle.Natural ? ImageStyles.Natural : ImageStyles.Vivid,
-                NumOfImages = 1,
-                Size = ImageSize._1024,
+                prompt,
+                style = style.GetDescription(),
+                substyle = subStyle != RecraftImgSubStyle.None ? subStyle.GetDescription() : null
             };
 
-            ImageResult? imageResult = await api.ImageGenerations.CreateImageAsync(request);
+            var response = await httpClient.PostAsync(
+                "https://external.api.recraft.ai/v1/images/generations",
+                new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json")
+            );
 
-            Data? imageData = imageResult?.Data?.FirstOrDefault();
-            if (imageData == null)
+            if (response.IsSuccessStatusCode)
             {
-                return "";
+                var result = await response.Content.ReadAsStringAsync();
+                var jsonResponse = JObject.Parse(result);
+                var imageUrl = jsonResponse["data"]?[0]?["url"]?.ToString(); // Access the URL inside the data array
+                _logger.LogInformation("Image generated successfully. URL: {ImageUrl}", imageUrl);
+                return imageUrl;
             }
 
-            string? url = imageData.Url;
-            return !String.IsNullOrWhiteSpace(url) ? url : "";
+            _logger.LogWarning("Failed to generate image. Status code: {StatusCode}", response.StatusCode);
         }
         catch (Exception e)
         {
             _logger.LogWarning("[{MethodName}] {Error}", nameof(GenerateImage), e.Message);
-            return "";
         }
+
+        _logger.LogInformation("Image generation process completed with Recraft AI.");
+        return "";
     }
 
     private async Task<string> GetTtsAudio(string text, string token)
@@ -2603,14 +2436,17 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                        "/reset_context - reset the context message\n" +
                        "/reset - reset the current conversation\n" +
                        "/toggle_voice - enable/disable voice mode\n" +
-                       "/toggle_img_quality - switch between standard or HD image quality\n" +
-                       "/toggle_img_style - switch between vivid or natural image style\n" +
                        "/toggle_anew_mode - switch on or off 'anew' mode. With this mode you can start each conversation from the beginning without relying on previous history\n" +
                        "/image - generate an image with help of DALL·E 3\n" +
                        "/usage - view the command list\n" +
                        "/info - show current settings\n" +
                        "/about - about this bot\n" +
-                       "/version - version of this bot";
+                       "/version - version of this bot\n" +
+                       "/key_recraft - set a Recraft AI API key\n" +
+                       "/reset_key_recraft - reset a Recraft AI API key\n" +
+                       "/toggle_recraft_style - switch between Realistic and Digital Illustration styles\n" +
+                       "/toggle_recraft_substyle - choose a sub-style for the current style\n" +
+                       "/reset_recraft_substyle - remove sub-style from image generation\n";
         
         if (storeUser.IsAdministrator)
         {
@@ -2619,9 +2455,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
                     "/deny - deny user\n" +
                     "/users - show active users\n" +
                     "/all_users - show all users\n" +
-                    "/broadcast - broadcast the version message\n" +
-                    "/force_update_models - force update deprecated models to GPT-4 Omni\n" +
-                    "/force_cleanup_context - force disable context filter mode and clear memories for all users";  // Add this line
+                    "/broadcast - broadcast the version message";
         }
 
         return await botClient.SendTextMessageAsync(
@@ -2652,8 +2486,7 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
     }
 
-    // Add this method to the UpdateHandler class
-    private async Task<Message> ForceUpdateModelsCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    private async Task<Message> SetKeyRecraftCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
@@ -2661,44 +2494,31 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
-            
-        if (storeUser.IsAdministrator == false)
+
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
         {
-            return await botClient.SendTextMessageAsync(message.Chat.Id, 
-                "This command might be executed only by the administrator.",
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_recraft' command you must input your Recraft AI API key. Try again.",
                 cancellationToken: cancellationToken);
         }
 
-        var deprecatedModels = new[] 
-        { 
-            Model.Gpt3, 
-            Model.Gpt4, 
-            Model.Claude21,
-            Model.GigaChatLite,
-            Model.GigaChatLitePlus,
-            Model.ElMultilingualV2
-        };
-
-        var users = _userRepository.GetAllUsers();
-        int updatedCount = 0;
-
-        foreach (var user in users)
+        string apiKey = strings[1];
+        if (String.IsNullOrWhiteSpace(apiKey))
         {
-            if (deprecatedModels.Contains(user.Model))
-            {
-                user.Model = Model.Gpt4OMini;
-                _userRepository.UpdateUser(user);
-                updatedCount++;
-            }
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_recraft' command you must input your Recraft AI API key. Try again.",
+                cancellationToken: cancellationToken);
         }
 
-        return await botClient.SendTextMessageAsync(message.Chat.Id,
-            $"Updated {updatedCount} users to use GPT-4 Omni Mini model.",
+        storeUser.RecraftApiKey = apiKey;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Recraft AI API key was set.",
             cancellationToken: cancellationToken);
     }
 
-    // Add this method to the UpdateHandler class
-    private async Task<Message> ForceCleanupContextFilterCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    private async Task<Message> ResetKeyRecraftCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         StoreUser? storeUser = GetStoreUser(message.From);
         if (storeUser == null)
@@ -2706,31 +2526,103 @@ Current image quality is: {storeUser.ImgQuality.ToString().ToLower()}",
             return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
                 cancellationToken: cancellationToken);
         }
-            
-        if (storeUser.IsAdministrator == false)
+
+        storeUser.RecraftApiKey = "";
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Recraft AI API key was reset.",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> ToggleRecraftStyleCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (String.IsNullOrWhiteSpace(storeUser.RecraftApiKey))
         {
             return await botClient.SendTextMessageAsync(message.Chat.Id, 
-                "This command might be executed only by the administrator.",
+                "Your Recraft API key is not set. Use '/key_recraft' command and set key.",
                 cancellationToken: cancellationToken);
         }
 
-        var users = _userRepository.GetAllUsers();
-        int updatedCount = 0;
+        // Toggle between Realistic and DigitalIllustration
+        storeUser.RecraftImgStyle = storeUser.RecraftImgStyle == RecraftImgStyle.Realistic 
+            ? RecraftImgStyle.DigitalIllustration 
+            : RecraftImgStyle.Realistic;
 
-        foreach (var user in users)
-        {
-            if (user.ContextFilterMode)
-            {
-                user.ContextFilterMode = false;
-                user.MemoryStorage.Clear();
-                user.WorkingMemory.Clear();
-                _userRepository.UpdateUser(user);
-                updatedCount++;
-            }
-        }
+        // Reset sub-style when changing main style
+        storeUser.RecraftImgSubStyle = storeUser.RecraftImgStyle.GetSubStyles().FirstOrDefault();
+        _userRepository.UpdateUser(storeUser);
 
         return await botClient.SendTextMessageAsync(message.Chat.Id,
-            $"Updated {updatedCount} users: context filter mode was disabled, memory storage and working memory were cleared.",
+            $"Current Recraft style is: {storeUser.RecraftImgStyle.GetDescription()}\n" +
+            $"Current sub-style is: {storeUser.RecraftImgSubStyle.GetDescription()}",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> ToggleRecraftSubStyleCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (String.IsNullOrWhiteSpace(storeUser.RecraftApiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "Your Recraft API key is not set. Use '/key_recraft' command and set key.",
+                cancellationToken: cancellationToken);
+        }
+
+        var availableSubStyles = storeUser.RecraftImgStyle.GetSubStyles().ToArray();
+        var currentIndex = Array.IndexOf(availableSubStyles, storeUser.RecraftImgSubStyle);
+        
+        // Move to next sub-style or wrap around to first
+        storeUser.RecraftImgSubStyle = availableSubStyles[(currentIndex + 1) % availableSubStyles.Length];
+        _userRepository.UpdateUser(storeUser);
+
+        var subStylesList = string.Join("\n", availableSubStyles.Select(s => $"- {s.GetDescription()}"));
+        
+        var currentSubStyleText = storeUser.RecraftImgSubStyle == RecraftImgSubStyle.None 
+            ? "no sub-style" 
+            : storeUser.RecraftImgSubStyle.GetDescription();
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            $"Current Recraft style is: {storeUser.RecraftImgStyle.GetDescription()}\n" +
+            $"Current sub-style is: {currentSubStyleText}\n\n" +
+            $"Available sub-styles for {storeUser.RecraftImgStyle.GetDescription()}:\n{subStylesList}",
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<Message> ResetRecraftSubStyleCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+        
+        if (String.IsNullOrWhiteSpace(storeUser.RecraftApiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, 
+                "Your Recraft API key is not set. Use '/key_recraft' command and set key.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.RecraftImgSubStyle = RecraftImgSubStyle.None;
+        _userRepository.UpdateUser(storeUser);
+        
+        return await botClient.SendTextMessageAsync(message.Chat.Id,
+            $"Recraft sub-style has been reset to none.\n" +
+            $"Current style is: {storeUser.RecraftImgStyle.GetDescription()}",
             cancellationToken: cancellationToken);
     }
 }
