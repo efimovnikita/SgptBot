@@ -1303,6 +1303,13 @@ public class UpdateHandler : IUpdateHandler
                 cancellationToken: cancellationToken);
         }
 
+        if (String.IsNullOrWhiteSpace(storeUser.RecraftApiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "You must setup your Recraft API key in order to use this model. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
         string? url = await GenerateImage(prompt, storeUser.RecraftApiKey, storeUser.RecraftImgStyle, storeUser.RecraftImgSubStyle);
         if (String.IsNullOrEmpty(url))
         {
