@@ -68,6 +68,8 @@ public class UpdateHandler : IUpdateHandler
             "Claude 3.5 Haiku is the next generation of our fastest model. For a similar speed to Claude 3 Haiku, Claude 3.5 Haiku improves across every skill set and surpasses Claude 3 Opus."),
         new ModelInfo("gigachatpro", "Sber GigaChat Pro", Model.GigaChatPro,
             "The model better follows complex instructions and can perform more complex tasks: significantly improved quality of summarization, rewriting and editing of texts, answering various questions. The model is well-versed in many applied domains, particularly in economic and legal issues."),
+        new ModelInfo("gigachatmax", "Sber GigaChat Max", Model.GigaChatMax,
+            "An advanced model for complex tasks, requiring a high level of creativity and quality of work."),
         new ModelInfo("gemini15pro", "Google Gemini 1.5 Pro", Model.Gemini15Pro,
             "The mid-size multimodal model, optimized for scaling across a wide-range of tasks."),
         new ModelInfo("recraftai", "Recraft AI", Model.RecraftAi,
@@ -404,12 +406,7 @@ public class UpdateHandler : IUpdateHandler
                    Hello everyone! We've just rolled out an exciting update to *{name}*. Here's what's new in version *{version}*:
 
                    ✨ *New Features*:
-                   - Integrated Recraft AI for high-quality image generation with customizable styles:
-                     • Two main styles: Realistic and Digital Illustration
-                     • Multiple sub-styles for each main style
-                     • Use `/toggle_recraft_style` and `/toggle_recraft_substyle` to customize your images
-                     • Generate images using `/image` command with your prompt
-                     • In order to use this feature you need to set your Recraft API key using `/key_recraft` command
+                   - Added GigaChat Max - an advanced model for complex tasks requiring high creativity and quality
 
                    💬 *Feedback*:
                    We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use `/contact <MESSAGE>` command).
@@ -906,7 +903,7 @@ public class UpdateHandler : IUpdateHandler
                 await client.SendTextMessageAsync(chatId,
                     "Your Claude API key is not set. Use '/key_claude' command and set key.");
                 return false;
-            case Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro when String.IsNullOrWhiteSpace(user.GigaChatApiKey):
+            case Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro or Model.GigaChatMax when String.IsNullOrWhiteSpace(user.GigaChatApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your GigaChat Auth key is not set. Use '/key_gigachat' command and set key.");
                 return false;
@@ -1883,7 +1880,7 @@ public class UpdateHandler : IUpdateHandler
                 message, messageText, cancellationToken),
             Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet or Model.Claude35Haiku => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
                 cancellationToken),
-            Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro => await GetResponseFromGigaChatModel(
+            Model.GigaChatLite or Model.GigaChatLitePlus or Model.GigaChatPro or Model.GigaChatMax => await GetResponseFromGigaChatModel(
                 botClient, storeUser, message, messageText, cancellationToken),
             Model.Gemini15Pro => await GetResponseFromGeminiModel(botClient, storeUser, message, messageText, cancellationToken),
             Model.RecraftAi => "The Recraft AI model can only be used with the '/image' command to generate images. Please use '/image' followed by your prompt, or select a different model for text conversations.",
@@ -1994,6 +1991,7 @@ public class UpdateHandler : IUpdateHandler
             Model.GigaChatLite => "GigaChat",
             Model.GigaChatLitePlus => "GigaChat-Plus",
             Model.GigaChatPro => "GigaChat-Pro",
+            Model.GigaChatMax => "GigaChat-Max",
             _ => "GigaChat"
         };
 
