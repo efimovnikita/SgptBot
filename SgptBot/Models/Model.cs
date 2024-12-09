@@ -19,5 +19,6 @@ public enum Model
     Claude35Haiku,
     Gpt4OMini,
     RecraftAi,
-    GigaChatMax
+    GigaChatMax,
+    Grok
 }

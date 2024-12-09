@@ -74,6 +74,8 @@ public class UpdateHandler : IUpdateHandler
             "The mid-size multimodal model, optimized for scaling across a wide-range of tasks."),
         new ModelInfo("recraftai", "Recraft AI", Model.RecraftAi,
             "Recraft AI is a powerful image generation model that creates high-quality, customizable images from text descriptions."),
+        new ModelInfo("grok", "xAI Grok", Model.Grok,
+            "Grok is a general purpose model (from xAI) that can be used for a variety of tasks, including generating and understanding text, code, and function calling."),
     ];
 
     public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, ApplicationSettings appSettings,
@@ -210,10 +212,43 @@ public class UpdateHandler : IUpdateHandler
             "/toggle_recraft_style" => ToggleRecraftStyleCommand(_botClient, message, cancellationToken),
             "/toggle_recraft_substyle" => ToggleRecraftSubStyleCommand(_botClient, message, cancellationToken),
             "/reset_recraft_substyle" => ResetRecraftSubStyleCommand(_botClient, message, cancellationToken),
+            "/key_grok"            => SetKeyGrokCommand(_botClient, message, cancellationToken),
             _                        => TalkToModelCommand(_botClient, message, messageText, cancellationToken)
         };
         Message sentMessage = await action;
         _logger.LogInformation("The message was sent with id: {SentMessageId}", sentMessage.MessageId);
+    }
+
+    private async Task<Message> SetKeyGrokCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
+    {
+        StoreUser? storeUser = GetStoreUser(message.From);
+        if (storeUser == null)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id, "Error getting the user from the store.",
+                cancellationToken: cancellationToken);
+        }
+
+        string[] strings = message.Text!.Split(' ');
+        if (strings.Length < 2)
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_grok' command you must input your Grok API key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        string apiKey = strings[1];
+        if (String.IsNullOrWhiteSpace(apiKey))
+        {
+            return await botClient.SendTextMessageAsync(message.Chat.Id,
+                "After '/key_grok' command you must input your Grok API key. Try again.",
+                cancellationToken: cancellationToken);
+        }
+
+        storeUser.GrokApiKey = apiKey;
+        _userRepository.UpdateUser(storeUser);
+
+        return await botClient.SendTextMessageAsync(message.Chat.Id, "Grok API key was set.",
+            cancellationToken: cancellationToken);
     }
 
     private async Task<Message> BroadcastCommand(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
@@ -406,7 +441,7 @@ public class UpdateHandler : IUpdateHandler
                    Hello everyone! We've just rolled out an exciting update to *{name}*. Here's what's new in version *{version}*:
 
                    ✨ *New Features*:
-                   - Added GigaChat Max - an advanced model for complex tasks requiring high creativity and quality
+                   - Integrated Grok - xAI's latest model known for its real-time knowledge and witty responses.
 
                    💬 *Feedback*:
                    We're always looking to improve and value your feedback. If you have any suggestions or encounter any issues, please let us know through (use `/contact <MESSAGE>` command).
@@ -898,6 +933,10 @@ public class UpdateHandler : IUpdateHandler
             case Model.Gpt3 or Model.Gpt4 or Model.Gpt4O or Model.Gpt4OMini when String.IsNullOrWhiteSpace(user.ApiKey):
                 await client.SendTextMessageAsync(chatId,
                     "Your OpenAI API key is not set. Use '/key' command and set key.");
+                return false;
+            case Model.Grok when String.IsNullOrWhiteSpace(user.GrokApiKey):
+                await client.SendTextMessageAsync(chatId,
+                    "Your Grok API key is not set. Use '/key_grok' command and set key.");
                 return false;
             case Model.Claude21 or Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet or Model.Claude35Haiku when String.IsNullOrWhiteSpace(user.ClaudeApiKey):
                 await client.SendTextMessageAsync(chatId,
@@ -1783,6 +1822,7 @@ public class UpdateHandler : IUpdateHandler
             $"GigaChat API key: `{storeUser.GigaChatApiKey}`\n" +
             $"Gemini API key: `{storeUser.GeminiApiKey}`\n" +
             $"Recraft AI API key: `{storeUser.RecraftApiKey}`\n" +
+            $"Grok API key: `{storeUser.GrokApiKey}`\n" +
             $"Model: `{ModelInfos.FirstOrDefault(info => info.ModelEnum.Equals(storeUser.Model))?.PrettyName}`\n" +
             $"Image style: `{storeUser.RecraftImgStyle.GetDescription()}`\n" +
             $"Image sub-style: `{storeUser.RecraftImgSubStyle.GetDescription()}`\n" +
@@ -1876,7 +1916,7 @@ public class UpdateHandler : IUpdateHandler
 
         string? response = storeUser!.Model switch
         {
-            Model.Gpt3 or Model.Gpt4 or Model.Gpt4O or Model.Gpt4OMini => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
+            Model.Gpt3 or Model.Gpt4 or Model.Gpt4O or Model.Gpt4OMini or Model.Grok => await GetResponseFromOpenAiLikeModel(botClient, storeUser,
                 message, messageText, cancellationToken),
             Model.Claude3Opus or Model.Claude3Sonnet or Model.Claude3Haiku or Model.Claude35Sonnet or Model.Claude35Haiku => await GetResponseFromClaude3Model(botClient, storeUser, message, messageText,
                 cancellationToken),
@@ -2184,7 +2224,12 @@ public class UpdateHandler : IUpdateHandler
         string messageText,
         CancellationToken cancellationToken)
     {
-        OpenAiApi api = new(storeUser.ApiKey);
+        OpenAiApi api = new(storeUser.Model == Model.Grok ? storeUser.GrokApiKey : storeUser.ApiKey);
+        
+        if (storeUser.Model == Model.Grok)
+        {
+            api.ApiUrlFormat = "https://api.x.ai/v1/chat/completions";
+        }
         
         List<ChatMessage> chatMessages = [];
 
@@ -2208,6 +2253,7 @@ public class UpdateHandler : IUpdateHandler
                 Model.Gpt3 => OpenAiNg.Models.Model.ChatGPTTurbo1106,
                 Model.Gpt4OMini => GptOMiniApiName,
                 Model.Gpt4O => Gpt4OApiName,
+                Model.Grok => "grok-beta",
                 _ => OpenAiNg.Models.Model.GPT4_1106_Preview
             },
             Messages = chatMessages.ToArray()

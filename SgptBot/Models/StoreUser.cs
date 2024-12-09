@@ -49,6 +49,7 @@ public class StoreUser
     public List<VectorMemoryItem> MemoryStorage { get; set; } = [];
     public List<VectorMemoryItem> WorkingMemory { get; set; } = [];
     public string RecraftApiKey { get; set; }
+    public string GrokApiKey { get; set; }
 
     public override string ToString()
     {
